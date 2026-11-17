@@ -77,7 +77,7 @@ final class BoardUIState {
     // MARK: Visible data
 
     var visibleColumns: [Column] {
-        store.settings.laterExpanded ? Column.allCases : [.todo, .doing, .done]
+        store.settings.laterExpanded ? Column.allCases : Column.allCases.filter { $0 != .later }
     }
 
     func visibleTasks(in column: Column) -> [TaskItem] {

@@ -102,6 +102,13 @@ struct StoreTests {
 
     // MARK: Moving and ordering
 
+    @Test func laterIsTheBacklogBeforeTodo() {
+        #expect(Column.allCases == [.later, .todo, .doing, .done])
+        #expect(Column.todo.previous == .later)
+        #expect(Column.later.previous == nil)
+        #expect(Column.done.next == nil)
+    }
+
     @Test func moveSetsTimestamps() {
         let task = add("x")
         clock.advance(days: 1)

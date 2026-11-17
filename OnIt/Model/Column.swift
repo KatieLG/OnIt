@@ -1,8 +1,9 @@
 import Foundation
 
-/// The four fixed columns every board has in v1.
+/// The four fixed columns every board has, in left-to-right order. Later sits first, before
+/// Todo, because it's the backlog that work is picked up from.
 enum Column: String, Codable, CaseIterable, Sendable, Identifiable {
-    case todo, doing, done, later
+    case later, todo, doing, done
 
     var id: String { rawValue }
 

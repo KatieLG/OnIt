@@ -43,5 +43,8 @@ The old folder is left untouched.
     Raycast welcome card.
 12. **Acceptance criterion 1 uses `@acme`**, which isn't a starting board. Add an Acme board
     (or an `acme` alias) first, or try `@home`.
-13. **Tests run hosted in the app.** `AppDelegate` detects the XCTest environment and uses an in-memory
+13. **Later is the leftmost column**, before Todo, rather than after Done as in §8.2. It's the backlog
+    that work is picked up from, so the board reads Later → Todo → In Progress → Done, and ⌘← on a
+    Todo card defers it to Later. It still collapses to a slim strip by default and accepts drops.
+14. **Tests run hosted in the app.** `AppDelegate` detects the XCTest environment and uses an in-memory
     store, so tests never touch your real data file or menu bar.

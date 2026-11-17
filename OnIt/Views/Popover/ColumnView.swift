@@ -6,15 +6,16 @@ struct ColumnsView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: PanelMetrics.columnSpacing) {
-            ColumnView(column: .todo, focus: focus)
-            ColumnView(column: .doing, focus: focus)
-            ColumnView(column: .done, focus: focus)
+            // Later is the backlog, so it comes first, before Todo.
             if store.settings.laterExpanded {
                 ColumnView(column: .later, focus: focus)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             } else {
                 LaterStrip()
             }
+            ColumnView(column: .todo, focus: focus)
+            ColumnView(column: .doing, focus: focus)
+            ColumnView(column: .done, focus: focus)
         }
         .padding(PanelMetrics.outerPadding)
     }
@@ -80,7 +81,7 @@ struct ColumnView: View {
                 Button {
                     withAnimation(BoardUIState.cardAnimation) { ui.toggleLater() }
                 } label: {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.left")
                         .font(.caption.weight(.semibold))
                         .padding(6)
                 }
@@ -159,7 +160,7 @@ struct LaterStrip: View {
             withAnimation(BoardUIState.cardAnimation) { ui.toggleLater() }
         } label: {
             VStack(spacing: 10) {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                 Text("Later")
                     .font(.system(.subheadline, design: .rounded).weight(.semibold))
