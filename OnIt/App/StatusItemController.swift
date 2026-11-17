@@ -19,7 +19,7 @@ final class StatusItemController: NSObject {
         super.init()
 
         if let button = statusItem.button {
-            let image = NSImage(systemSymbolName: "square.stack.3d.up", accessibilityDescription: "OnIt")
+            let image = NSImage(systemSymbolName: "checkmark.circle", accessibilityDescription: "OnIt")
             image?.isTemplate = true
             button.image = image
             button.imagePosition = .imageLeading

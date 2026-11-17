@@ -24,7 +24,7 @@ and git-ignored; edit `project.yml` instead.
 
 The app is ad-hoc signed ("Sign to Run Locally") and unsandboxed. There are two ways to see the board:
 
-- **Menu bar panel.** Click the stacked-squares icon in the menu bar for a drop-down panel. Right-click
+- **Menu bar panel.** Click the tick-in-a-circle icon in the menu bar for a drop-down panel. Right-click
   (or ⌥-click) shows *Open OnIt · Open in Window · Archive… · Settings… · Quit*.
 - **Full window.** Opening OnIt as an app (Finder, Spotlight, Launchpad, or opening it again while
   it's running) shows a large, centred, resizable window that supports full screen (⌃⌘F or the
