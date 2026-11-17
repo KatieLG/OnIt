@@ -29,19 +29,20 @@ struct Snapshot: Codable, Equatable, Sendable {
 
     // MARK: Seed
 
-    static let welcomeTitle = "Press your Raycast hotkey and try: Draft proposal @c !L #sales"
+    static let welcomeTitle = "Press your Raycast hotkey and try: Pick up dry cleaning @home !s #errands"
 
+    /// First-launch boards: Home and Work, with Work as the default (tasks without an `@board`).
     static func seed(now: Date = Date()) -> Snapshot {
-        let internalBoard = Board(
-            name: "Internal", aliases: ["int", "i"], colorHex: "#5B8DEF", isDefault: true, sortOrder: 0
+        let home = Board(
+            name: "Home", aliases: ["home", "h"], colorHex: "#4CAF7A", isDefault: false, sortOrder: 0
         )
-        let client = Board(
-            name: "Client", aliases: ["client", "c"], colorHex: "#A970FF", isDefault: false, sortOrder: 1
+        let work = Board(
+            name: "Work", aliases: ["work", "w"], colorHex: "#5B8DEF", isDefault: true, sortOrder: 1
         )
         let welcome = TaskItem(
-            boardId: internalBoard.id, title: welcomeTitle, column: .todo, order: 1024, createdAt: now
+            boardId: work.id, title: welcomeTitle, column: .todo, order: 1024, createdAt: now
         )
-        return Snapshot(boards: [internalBoard, client], tasks: [welcome])
+        return Snapshot(boards: [home, work], tasks: [welcome])
     }
 
     // MARK: Coding

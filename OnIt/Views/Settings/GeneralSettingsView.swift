@@ -124,10 +124,10 @@ struct GeneralSettingsView: View {
     private struct URLExample { let url: String; let meaning: String }
 
     private static let urlExamples: [URLExample] = [
-        URLExample(url: "onit://add?text=Draft%20proposal%20%40c%20%21L%20%23sales",
-                   meaning: "Add “Draft proposal” to Client, size L, tagged sales"),
+        URLExample(url: "onit://add?text=Pick%20up%20dry%20cleaning%20%40home%20%21s%20%23errands",
+                   meaning: "Add “Pick up dry cleaning” to Home, size S, tagged errands"),
         URLExample(url: "onit://open", meaning: "Show the board"),
         URLExample(url: "onit://toggle", meaning: "Show or hide the board"),
-        URLExample(url: "onit://open?board=int", meaning: "Show the board with Internal selected"),
+        URLExample(url: "onit://open?board=work", meaning: "Show the board with Work selected"),
     ]
 }

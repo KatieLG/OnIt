@@ -6,14 +6,14 @@ import Testing
 struct StoreTests {
     let clock = TestClock()
     let store: AppStore
-    let internalBoard: Board
-    let client: Board
+    let work: Board
+    let home: Board
 
     init() {
         let seed = Snapshot.seed(now: clock.now)
         store = AppStore(snapshot: Snapshot(boards: seed.boards, tasks: []), clock: clock.closure)
-        internalBoard = store.boards[0]
-        client = store.boards[1]
+        home = store.boards[0]
+        work = store.boards[1]
     }
 
     @discardableResult
@@ -29,24 +29,24 @@ struct StoreTests {
 
     @Test func seedHasTwoBoardsAndWelcomeCard() {
         let seed = Snapshot.seed()
-        #expect(seed.boards.map(\.name) == ["Internal", "Client"])
-        #expect(seed.boards[0].isDefault)
-        #expect(seed.boards[0].aliases == ["int", "i"])
-        #expect(seed.boards[1].aliases == ["client", "c"])
+        #expect(seed.boards.map(\.name) == ["Home", "Work"])
+        #expect(seed.boards.filter(\.isDefault).map(\.name) == ["Work"])
+        #expect(seed.boards[0].aliases == ["home", "h"])
+        #expect(seed.boards[1].aliases == ["work", "w"])
         #expect(seed.tasks.count == 1)
         #expect(seed.tasks[0].column == .todo)
-        #expect(seed.tasks[0].boardId == seed.boards[0].id)
+        #expect(seed.tasks[0].boardId == seed.boards[1].id)
     }
 
     // MARK: Adding
 
     @Test func addParsesShorthand() {
-        let result = store.add(text: "Draft proposal @c !L #sales")
+        let result = store.add(text: "Draft proposal @h !L #sales")
         guard case .added(let task, let board) = result else {
             Issue.record("expected .added, got \(result)")
             return
         }
-        #expect(board.id == client.id)
+        #expect(board.id == home.id)
         #expect(task.title == "Draft proposal")
         #expect(task.size == .l)
         #expect(task.tags == ["sales"])
@@ -55,9 +55,9 @@ struct StoreTests {
     }
 
     @Test func addWithoutBoardUsesDefaultOrPreferred() {
-        #expect(store.add(text: "a").task?.boardId == internalBoard.id)
-        #expect(store.add(text: "b", preferredBoardId: client.id).task?.boardId == client.id)
-        #expect(store.add(text: "c @int", preferredBoardId: client.id).task?.boardId == internalBoard.id)
+        #expect(store.add(text: "a").task?.boardId == work.id)
+        #expect(store.add(text: "b", preferredBoardId: home.id).task?.boardId == home.id)
+        #expect(store.add(text: "c @work", preferredBoardId: home.id).task?.boardId == work.id)
     }
 
     @Test func unknownBoardWarns() {
@@ -67,9 +67,9 @@ struct StoreTests {
             return
         }
         #expect(task.title == "Review PR @nobody")
-        #expect(board.id == internalBoard.id)
+        #expect(board.id == work.id)
         #expect(message.contains("No board '@nobody'"))
-        #expect(message.contains("Internal"))
+        #expect(message.contains("Work"))
     }
 
     @Test func emptyTitleRejected() {
@@ -91,10 +91,10 @@ struct StoreTests {
     }
 
     @Test func boardRenameIsPickedUpImmediately() {
-        store.renameBoard(client.id, to: "Acme Co")
-        #expect(add("x @acme-co").boardId == client.id)
-        store.addAlias("acme", to: client.id)
-        #expect(add("y @acme").boardId == client.id)
+        store.renameBoard(home.id, to: "Acme Co")
+        #expect(add("x @acme-co").boardId == home.id)
+        store.addAlias("acme", to: home.id)
+        #expect(add("y @acme").boardId == home.id)
     }
 
     // MARK: Moving and ordering
@@ -168,10 +168,10 @@ struct StoreTests {
     }
 
     @Test func orderingIsConsistentAcrossBoardViews() {
-        let a = add("a @int"), b = add("b @c"), c = add("c @int")
+        let a = add("a @work"), b = add("b @h"), c = add("c @work")
         store.move(c.id, to: .todo, position: .before(b.id))
         #expect(todoTitles() == ["a", "c", "b"])
-        #expect(store.tasks(in: .todo, boardId: internalBoard.id).map(\.title) == ["a", "c"])
+        #expect(store.tasks(in: .todo, boardId: work.id).map(\.title) == ["a", "c"])
         _ = a
     }
 
@@ -179,12 +179,12 @@ struct StoreTests {
 
     @Test func editTitleAppliesShorthand() {
         let task = add("Old title #one")
-        store.editTitle(task.id, shorthand: "New title !l #two @c")
+        store.editTitle(task.id, shorthand: "New title !l #two @h")
         let edited = store.task(id: task.id)!
         #expect(edited.title == "New title")
         #expect(edited.size == .l)
         #expect(edited.tags == ["one", "two"])
-        #expect(edited.boardId == client.id)
+        #expect(edited.boardId == home.id)
     }
 
     @Test func editWithOnlyTokensKeepsTitle() {
@@ -197,11 +197,11 @@ struct StoreTests {
     @Test func setSizeBoardTagsAndDelete() {
         let task = add("x")
         store.setSize(task.id, .xl)
-        store.setBoard(task.id, boardId: client.id)
+        store.setBoard(task.id, boardId: home.id)
         store.setTags(task.id, ["#A", "b", "a"])
         let t = store.task(id: task.id)!
         #expect(t.size == .xl)
-        #expect(t.boardId == client.id)
+        #expect(t.boardId == home.id)
         #expect(t.tags == ["a", "b"])
         store.delete(task.id)
         #expect(store.task(id: task.id) == nil)
@@ -261,51 +261,54 @@ struct StoreTests {
     // MARK: Boards
 
     @Test func aliasValidation() {
-        #expect(store.validateAlias("", for: client.id) == .empty)
-        #expect(store.validateAlias("Bad Alias", for: client.id) == .invalidCharacters)
-        #expect(store.validateAlias("café", for: client.id) == .invalidCharacters)
-        #expect(store.validateAlias("int", for: client.id) == .duplicate(boardName: "Internal"))
-        #expect(store.validateAlias("INT", for: client.id) == .duplicate(boardName: "Internal"))
-        #expect(store.validateAlias("internal", for: client.id) == .duplicate(boardName: "Internal"))
-        #expect(store.validateAlias("ok_alias-2", for: client.id) == nil)
-        #expect(store.addAlias("i", to: client.id) == .duplicate(boardName: "Internal"))
-        #expect(store.addAlias("CL", to: client.id) == nil)
-        #expect(store.board(id: client.id)?.aliases.contains("cl") == true)
+        #expect(store.validateAlias("", for: home.id) == .empty)
+        #expect(store.validateAlias("Bad Alias", for: home.id) == .invalidCharacters)
+        #expect(store.validateAlias("café", for: home.id) == .invalidCharacters)
+        #expect(store.validateAlias("work", for: home.id) == .duplicate(boardName: "Work"))
+        #expect(store.validateAlias("WORK", for: home.id) == .duplicate(boardName: "Work"))
+        #expect(store.validateAlias("ok_alias-2", for: home.id) == nil)
+        #expect(store.addAlias("w", to: home.id) == .duplicate(boardName: "Work"))
+        #expect(store.addAlias("HM", to: home.id) == nil)
+        #expect(store.board(id: home.id)?.aliases.contains("hm") == true)
+
+        // Another board's name (as a slug) is reserved too, not just its aliases.
+        store.renameBoard(work.id, to: "Day Job")
+        #expect(store.validateAlias("day-job", for: home.id) == .duplicate(boardName: "Day Job"))
     }
 
     @Test func exactlyOneDefault() {
-        store.setDefaultBoard(client.id)
-        #expect(store.boards.filter(\.isDefault).map(\.id) == [client.id])
-        #expect(add("x").boardId == client.id)
+        store.setDefaultBoard(home.id)
+        #expect(store.boards.filter(\.isDefault).map(\.id) == [home.id])
+        #expect(add("x").boardId == home.id)
     }
 
     @Test func cannotDeleteDefaultBoard() {
         #expect(throws: BoardError.cannotDeleteDefault) {
-            try store.deleteBoard(internalBoard.id, tasks: .deleteTasks)
+            try store.deleteBoard(work.id, tasks: .deleteTasks)
         }
     }
 
     @Test func deleteBoardMovingTasks() throws {
-        let task = add("x @c")
-        try store.deleteBoard(client.id, tasks: .moveTasks(to: internalBoard.id))
-        #expect(store.boards.map(\.id) == [internalBoard.id])
-        #expect(store.task(id: task.id)?.boardId == internalBoard.id)
+        let task = add("x @h")
+        try store.deleteBoard(home.id, tasks: .moveTasks(to: work.id))
+        #expect(store.boards.map(\.id) == [work.id])
+        #expect(store.task(id: task.id)?.boardId == work.id)
 
         store.undo()
         #expect(store.boards.count == 2)
-        #expect(store.task(id: task.id)?.boardId == client.id)
+        #expect(store.task(id: task.id)?.boardId == home.id)
     }
 
     @Test func deleteBoardDeletingTasksIsUndoable() throws {
-        let task = add("x @c")
-        let entry = try store.deleteBoard(client.id, tasks: .deleteTasks)
+        let task = add("x @h")
+        let entry = try store.deleteBoard(home.id, tasks: .deleteTasks)
         #expect(store.task(id: task.id) == nil)
         #expect(store.undo(ifTop: try #require(entry)))
         #expect(store.task(id: task.id) != nil)
     }
 
     @Test func undoIfTopIgnoresStaleEntries() throws {
-        let entry = try #require(try store.deleteBoard(client.id, tasks: .deleteTasks))
+        let entry = try #require(try store.deleteBoard(home.id, tasks: .deleteTasks))
         add("later change")
         #expect(!store.undo(ifTop: entry))
         #expect(store.boards.count == 1)
@@ -313,21 +316,21 @@ struct StoreTests {
 
     @Test func deleteBoardRejectsBadTarget() {
         #expect(throws: BoardError.invalidTarget) {
-            try store.deleteBoard(client.id, tasks: .moveTasks(to: client.id))
+            try store.deleteBoard(home.id, tasks: .moveTasks(to: home.id))
         }
     }
 
     @Test func reorderBoards() {
         store.moveBoards(fromOffsets: IndexSet(integer: 1), toOffset: 0)
-        #expect(store.boards.map(\.name) == ["Client", "Internal"])
+        #expect(store.boards.map(\.name) == ["Work", "Home"])
         #expect(store.boards.map(\.sortOrder) == [0, 1])
     }
 
     @Test func addBoardPicksUnusedColour() {
         let board = store.addBoard(name: "Globex")
         #expect(!board.isDefault)
-        #expect(board.colorHex != internalBoard.colorHex)
-        #expect(board.colorHex != client.colorHex)
+        #expect(board.colorHex != work.colorHex)
+        #expect(board.colorHex != home.colorHex)
         #expect(store.boards.last?.id == board.id)
     }
 
@@ -353,13 +356,13 @@ struct StoreTests {
     }
 
     @Test func filtersWorkInAllAndSingleBoardViews() {
-        add("Invoice Acme @c #billing !s")
-        add("Fix invoice bug @int #billing #urgent")
-        add("Lunch @int")
+        add("Invoice Acme @h #billing !s")
+        add("Fix invoice bug @work #billing #urgent")
+        add("Lunch @work")
 
         var filter = TaskFilter(text: "invoice")
         #expect(store.tasks(in: .todo, filter: filter).count == 2)
-        #expect(store.tasks(in: .todo, boardId: internalBoard.id, filter: filter).count == 1)
+        #expect(store.tasks(in: .todo, boardId: work.id, filter: filter).count == 1)
 
         filter = TaskFilter(tags: ["urgent"])
         #expect(store.tasks(in: .todo, filter: filter).map(\.title) == ["Fix invoice bug"])
@@ -371,7 +374,7 @@ struct StoreTests {
         #expect(store.tasks(in: .todo, filter: filter).count == 2)
 
         filter = TaskFilter(sizes: [.s])
-        #expect(store.tasks(in: .todo, boardId: client.id, filter: filter).count == 1)
+        #expect(store.tasks(in: .todo, boardId: home.id, filter: filter).count == 1)
 
         #expect(store.allTags == ["billing", "urgent"])
     }

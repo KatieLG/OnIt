@@ -136,7 +136,7 @@ final class AppStore {
     private func apply(_ snapshot: Snapshot) {
         var boards = snapshot.boards.sorted { ($0.sortOrder, $0.name) < ($1.sortOrder, $1.name) }
         if boards.isEmpty {
-            boards = [Board(name: "Internal", aliases: ["int", "i"], colorHex: Self.boardPalette[0], isDefault: true)]
+            boards = [Board(name: "Work", aliases: ["work", "w"], colorHex: Self.boardPalette[0], isDefault: true)]
         }
         let defaults = boards.indices.filter { boards[$0].isDefault }
         if defaults.isEmpty {

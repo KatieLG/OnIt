@@ -176,14 +176,14 @@ struct PersistenceTests {
 
     @Test func dataSurvivesRelaunch() throws {
         let first = AppStore(persistence: persistence)
-        _ = first.add(text: "survivor @c !m #keep")
+        _ = first.add(text: "survivor @h !m #keep")
         first.flush(synchronously: true)
 
         let second = AppStore(persistence: persistence)
         let task = try #require(second.tasks.first { $0.title == "survivor" })
         #expect(task.size == .m)
         #expect(task.tags == ["keep"])
-        #expect(second.board(id: task.boardId)?.name == "Client")
+        #expect(second.board(id: task.boardId)?.name == "Home")
     }
 
     @Test func externalEditsAreDetectedButOwnWritesIgnored() async throws {

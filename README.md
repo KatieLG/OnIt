@@ -156,9 +156,10 @@ The spec asked for these to be flagged rather than silently decided:
    (`!l`) keeps the title and applies the tokens. `@board` in an edit moves the card.
 9. **Filters:** text terms must all match (title or tags; `#term` matches tags only). Selected tags and
    sizes match *any* (OR). The size filter includes "unsized".
-10. **Seed card** text drops the spec's backticks: "Press your Raycast hotkey and try: Draft proposal @c !L #sales".
-11. **Acceptance criterion 1 uses `@acme`**, but the seed boards are Internal and Client. Add an Acme board
-    (or an `acme` alias) first, or try `@c`.
+10. **Starting boards are Home (`@home`, `@h`) and Work (`@work`, `@w`)**, not the spec's Internal and Client.
+    Work is the default board. The welcome card reads "Press your Raycast hotkey and try: Pick up dry cleaning @home !s #errands".
+11. **Acceptance criterion 1 uses `@acme`**, which isn't a starting board. Add an Acme board
+    (or an `acme` alias) first, or try `@home`.
 12. **Tests run hosted in the app.** `AppDelegate` detects the XCTest environment and uses an in-memory
     store, so tests never touch your real data file or menu bar.
 
