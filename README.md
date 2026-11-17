@@ -17,9 +17,15 @@ xcodebuild -scheme Stackban -destination 'platform=macOS' test
 Or open `Stackban.xcodeproj` after `xcodegen generate` and press ⌘R. The `.xcodeproj` is generated
 and git-ignored; edit `project.yml` instead.
 
-The app is ad-hoc signed ("Sign to Run Locally"), unsandboxed, and has no Dock icon. Look for
-the stacked-squares icon in the menu bar. Left-click toggles the board; right-click (or ⌥-click)
-shows *Open Stackban · Archive… · Settings… · Quit*.
+The app is ad-hoc signed ("Sign to Run Locally") and unsandboxed. There are two ways to see the board:
+
+- **Menu bar panel.** Click the stacked-squares icon in the menu bar for a drop-down panel. Right-click
+  (or ⌥-click) shows *Open Stackban · Open in Window · Archive… · Settings… · Quit*.
+- **Full window.** Opening Stackban as an app (Finder, Spotlight, Launchpad, or opening it again while
+  it's running) shows a large, centred, resizable window that supports full screen (⌃⌘F or the
+  green button). While it's open, Stackban has a Dock icon and app menu. Closing it returns Stackban
+  to menu bar only. Its size and position are remembered. Launches from a `stackban://` link (Raycast)
+  or at login stay silent and don't open it.
 
 The bundle ID is the placeholder `com.example.stackban` (in `project.yml`).
 
@@ -98,7 +104,8 @@ Everything lives in one human-readable file:
 | ⌘L | Expand / collapse Later |
 | / | Focus filter |
 | ⌘1…⌘9 | Switch board (1 = All) |
-| Esc | Clear filter → cancel edit → leave text field → close |
+| Esc | Clear filter → cancel edit → leave text field → close (panel only) |
+| ⌘W | Close the panel or window |
 
 ## Project layout
 

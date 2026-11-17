@@ -82,8 +82,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         ])
         panel.contentView = effect
 
-        keyRouter = KeyboardRouter(ui: ui, panel: panel, close: { [weak self] in self?.close() })
-        ui.closePanel = { [weak self] in self?.close() }
+        keyRouter = KeyboardRouter(ui: ui, window: panel, closesOnEscape: true, close: { [weak self] in self?.close() })
 
         observeContinuously { [weak self] in self?.laterExpandedChanged() }
     }

@@ -1,20 +1,38 @@
 import AppKit
 import SwiftUI
 
-/// Opens the Settings and Archive windows from an `LSUIElement` app.
+/// Opens the main board, Settings and Archive windows from an `LSUIElement` app.
 ///
-/// While either window is open the app temporarily becomes a regular app (Dock icon) so the
-/// window reliably comes to the front; it reverts to an accessory app when they close.
+/// While any of them is open the app temporarily becomes a regular app (Dock icon, app menu,
+/// ⌘-Tab, full screen) so windows reliably come to the front; it reverts to an accessory
+/// (menu bar only) app when they all close.
 @MainActor
 final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let store: AppStore
     private let notifier: Notifier
+    private let mainUI: BoardUIState
+    private var mainWindow: MainWindowController?
     private var settingsWindow: NSWindow?
     private var archiveWindow: NSWindow?
 
-    init(store: AppStore, notifier: Notifier) {
+    init(store: AppStore, notifier: Notifier, mainUI: BoardUIState) {
         self.store = store
         self.notifier = notifier
+        self.mainUI = mainUI
+    }
+
+    func showMainWindow() {
+        if mainWindow == nil {
+            let controller = MainWindowController(store: store, ui: mainUI)
+            controller.onClose = { [weak self, weak controller] in
+                self?.revertActivationPolicyIfNeeded(closing: controller?.window)
+            }
+            mainWindow = controller
+        }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+        mainWindow?.show()
+        mainWindow?.window.orderFrontRegardless()
     }
 
     func showSettings() {
@@ -57,9 +75,14 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        let closing = notification.object as? NSWindow
-        let others = [settingsWindow, archiveWindow].compactMap { $0 }.filter { $0 !== closing && $0.isVisible }
-        if others.isEmpty {
+        revertActivationPolicyIfNeeded(closing: notification.object as? NSWindow)
+    }
+
+    private func revertActivationPolicyIfNeeded(closing: NSWindow?) {
+        let open = [mainWindow?.window, settingsWindow, archiveWindow]
+            .compactMap { $0 }
+            .filter { $0 !== closing && ($0.isVisible || $0.isMiniaturized) }
+        if open.isEmpty {
             NSApp.setActivationPolicy(.accessory)
         }
     }

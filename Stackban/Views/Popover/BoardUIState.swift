@@ -35,7 +35,6 @@ final class BoardUIState {
     /// Set to ask `RootView` to move focus; it clears this once handled.
     var focusRequest: FocusRequest?
 
-    @ObservationIgnored var closePanel: () -> Void = {}
     @ObservationIgnored var openSettings: () -> Void = {}
     @ObservationIgnored private var feedbackTask: Task<Void, Never>?
 

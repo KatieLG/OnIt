@@ -6,18 +6,23 @@ import Carbon.HIToolbox
 @MainActor
 final class KeyboardRouter {
     private let ui: BoardUIState
-    private weak var panel: NSWindow?
+    private weak var window: NSWindow?
     private let close: () -> Void
+    private let closesOnEscape: Bool
 
-    init(ui: BoardUIState, panel: NSWindow, close: @escaping () -> Void) {
+    /// - Parameters:
+    ///   - close: Closes the hosting surface (⌘W, and before opening Settings).
+    ///   - closesOnEscape: Whether Esc with nothing left to cancel closes it (panel: yes, window: no).
+    init(ui: BoardUIState, window: NSWindow, closesOnEscape: Bool, close: @escaping () -> Void) {
         self.ui = ui
-        self.panel = panel
+        self.window = window
+        self.closesOnEscape = closesOnEscape
         self.close = close
     }
 
     /// True while a text field (filter, add, inline edit) is being typed into.
     private var isTyping: Bool {
-        panel?.firstResponder is NSText
+        window?.firstResponder is NSText
     }
 
     /// Returns true if the event was handled and should be swallowed.
@@ -27,7 +32,10 @@ final class KeyboardRouter {
         let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
 
         if keyCode == kVK_Escape {
-            if !ui.handleEscape() { close() }
+            if !ui.handleEscape() {
+                guard closesOnEscape else { return false }
+                close()
+            }
             return true
         }
 
@@ -45,7 +53,7 @@ final class KeyboardRouter {
                 ui.toggleLater()
                 return true
             case ",":
-                close()
+                if closesOnEscape { close() }
                 ui.openSettings()
                 return true
             case "w":

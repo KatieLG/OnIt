@@ -46,9 +46,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !Self.isRunningTests else { return }
 
-        let windows = WindowCoordinator(store: store, notifier: notifier)
+        let mainUI = BoardUIState(store: store)
+        let windows = WindowCoordinator(store: store, notifier: notifier, mainUI: mainUI)
         self.windows = windows
         ui.openSettings = { [weak self] in self?.showSettings() }
+        mainUI.openSettings = { [weak self] in self?.showSettings() }
 
         let panel = PanelController(store: store, ui: ui)
         panelController = panel
@@ -70,6 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pendingURLs.removeAll()
         queued.forEach(handle)
 
+        // Opened as an app (Finder, Spotlight, Launchpad, `open -a`): show the full window.
+        // Launches caused by a stackban:// URL (Raycast) or a login item stay silent.
+        if Self.isDefaultLaunch(notification), queued.isEmpty {
+            windows.showMainWindow()
+        }
+
         if let issue = store.launchIssue {
             store.launchIssue = nil
             DispatchQueue.main.async { Self.showAlert(title: "Stackban recovered your data", message: issue) }
@@ -85,9 +93,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController?.appDidResignActive()
     }
 
+    /// Opening Stackban again while it's running (Finder, Spotlight, Dock) brings up the window.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        panelController?.show()
+        showMainWindow()
         return false
+    }
+
+    /// AppKit sets `launchIsDefault` to false for launches that open a URL or document.
+    /// Login-item launches are excluded too, so launch-at-login stays menu bar only.
+    private static func isDefaultLaunch(_ notification: Notification) -> Bool {
+        let isDefault = notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? false
+        let launchEvent = NSAppleEventManager.shared().currentAppleEvent
+        let asLoginItem = launchEvent?.eventID == kAEOpenApplication
+            && launchEvent?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+        return isDefault && !asLoginItem
     }
 
     // MARK: URL handling
@@ -149,6 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Stackban", action: #selector(openPanel), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Open in Window", action: #selector(openMainWindow), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Archive…", action: #selector(openArchive), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsFromMenu), keyEquivalent: ",").target = self
         menu.addItem(.separator())
@@ -157,6 +177,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openPanel() { panelController?.show() }
+    @objc private func openMainWindow() { showMainWindow() }
+
+    func showMainWindow() {
+        panelController?.close()
+        windows?.showMainWindow()
+    }
     @objc private func openArchive() {
         panelController?.close()
         windows?.showArchive()
