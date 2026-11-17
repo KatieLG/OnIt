@@ -4,7 +4,7 @@
 
 <h1 align="center">OnIt</h1>
 
-<p align="center"><strong>Every “on it”, on one board.</strong><br>
+<p align="center"><strong>Stay “on it”.</strong><br>
 A native macOS board for all the small things you've said you'll do.</p>
 
 ---
