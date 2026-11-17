@@ -1,179 +1,91 @@
-# OnIt
+<p align="center">
+  <img src="OnIt/Resources/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="112" alt="OnIt app icon">
+</p>
 
-A native macOS menu bar kanban board for the stream of small asks that land on you every day.
-Capture a task from anywhere with one Raycast shortcut and a line of shorthand; drag it through
-Todo → In Progress → Done (or park it in Later). See [`STACKBAN_SPEC.md`](STACKBAN_SPEC.md) for the full brief.
+<h1 align="center">OnIt</h1>
 
-> **Renamed from Stackban.** The spec uses the working name *Stackban*. The app is now **OnIt**
-> (`onit://`, `com.example.onit`). On first launch, OnIt copies any data from
-> `~/Library/Application Support/Stackban/` into its own folder, renaming `stackban.*.json` to
-> `onit.*.json`. The old folder is left untouched, so delete it by hand once you're happy.
+<p align="center"><strong>Every “on it”, on one board.</strong><br>
+A native macOS board for all the small things you've said you'll do.</p>
 
-## Build and run
+---
 
-Requires macOS 14+, Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+“Can you send that over?” *On it.* “Could you take a look?” *On it.*
+
+Small asks land all day, at work and at home, and they live in your head until one slips. OnIt gives them
+somewhere to go. Type one line and it's on your board, sized and sorted. At a glance you can see what's
+waiting, what you're doing, what you finished this week, and whether you've taken on too much.
+
+## In your menu bar, or full screen
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/onit-panel.png" alt="OnIt's translucent board dropping down from the menu bar"></td>
+    <td width="50%"><img src="docs/screenshots/onit-window.png" alt="OnIt's full app window with Todo, In Progress, Done and Later columns"></td>
+  </tr>
+  <tr>
+    <td align="center">Click the ✓ in the menu bar for a translucent board over whatever you're doing.</td>
+    <td align="center">Or open OnIt as an app for a full window you can resize or take full screen.</td>
+  </tr>
+</table>
+
+## Home and work, kept apart
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/onit-home.png" alt="OnIt showing only the Home board"></td>
+    <td width="50%"><img src="docs/screenshots/onit-work.png" alt="OnIt showing only the Work board"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Home</b>: errands, admin, plans.</td>
+    <td align="center"><b>Work</b>: everything you've said yes to.</td>
+  </tr>
+</table>
+
+Switch boards with one click (or ⌘1–⌘9), see them all together in **All**, and add as many boards as you like.
+
+## What makes it different
+
+- **Sizes you can see.** Every task is XS (minutes) to XL (days), shown as a colour stripe and a label.
+  Columns add up their load, and In Progress turns orange when you're carrying too much.
+- **Shorthand capture.** `Send invoice @work !s #billing` puts it on Work, sized S, tagged *billing*.
+  Use `@` for the board, `!` for the size and `#` for tags, or none of them.
+- **Keyboard first, drag friendly.** Arrow keys to move around, ⌘-arrows to move cards, ⌥1–5 to size them,
+  ⌘Z to undo. Or just drag.
+- **Tidies itself.** Done tasks move to the Archive after a week, so the board stays about now.
+- **Private by design.** No account, no cloud, no tracking. One readable JSON file on your Mac, with
+  automatic backups.
+
+## Install
+
+You need macOS 14 or later, Xcode 16 or later, and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
+brew install xcodegen
 xcodegen generate
-xcodebuild -scheme OnIt -destination 'platform=macOS' build
-xcodebuild -scheme OnIt -destination 'platform=macOS' test
+xcodebuild -scheme OnIt -configuration Release -destination 'platform=macOS' -derivedDataPath build build
+cp -R build/Build/Products/Release/OnIt.app /Applications/
 ```
 
-Or open `OnIt.xcodeproj` after `xcodegen generate` and press ⌘R. The `.xcodeproj` is generated
-and git-ignored; edit `project.yml` instead.
+Open OnIt from Applications. Turn on **Launch at login** in **Settings → General** to keep it in your menu bar.
 
-The app is ad-hoc signed ("Sign to Run Locally") and unsandboxed. There are two ways to see the board:
+## Works great with Raycast (optional)
 
-- **Menu bar panel.** Click the tick-in-a-circle icon in the menu bar for a drop-down panel. Right-click
-  (or ⌥-click) shows *Open OnIt · Open in Window · Archive… · Settings… · Quit*.
-- **Full window.** Opening OnIt as an app (Finder, Spotlight, Launchpad, or opening it again while
-  it's running) shows a large, centred, resizable window that supports full screen (⌃⌘F or the
-  green button). While it's open, OnIt has a Dock icon and app menu. Closing it returns OnIt
-  to menu bar only. Its size and position are remembered. Launches from a `onit://` link (Raycast)
-  or at login stay silent and don't open it.
-
-The bundle ID is the placeholder `com.example.onit` (in `project.yml`).
-
-## Shorthand
-
-```
-Draft Acme proposal @acme !L #sales
-```
-
-| Token | Meaning |
-|---|---|
-| `@alias` | Board, by alias or by name with spaces as `-` (`@acme-co`). Case-insensitive; last valid one wins. Unknown boards stay in the title, the task goes to the default board, and you're told. |
-| `!size` | `xs` `s` `m` `l` `xl`, case-insensitive; last valid one wins. |
-| `#tag` | `[A-Za-z0-9_-]+`, stored lowercase, de-duplicated. |
-| `\@` `\!` `\#` | Keep the sigil literally. |
-
-Sigils only count at the start of a word, so `me@acme.com` is plain text. Unrecognised tokens
-(`!urgent`, `@nobody`, a bare `#`) stay in the title. Titles are capped at 280 characters.
-The same shorthand works in the in-app "+ Add task…" field and when editing a card's title.
-
-## URL scheme
-
-| URL | Action |
-|---|---|
-| `onit://add?text=<percent-encoded line>` | Parse and add the task, without opening the board. |
-| `onit://open` | Show the board. |
-| `onit://open?board=<alias>` | Show the board with that board selected. |
-| `onit://toggle` | Show or hide the board. |
-
-`+` in the query is a literal plus, not a space. Invalid links post a notification instead of
-failing silently.
+If you use [Raycast](https://www.raycast.com), the two script commands in [`raycast/`](raycast) add global
+shortcuts. **Add OnIt Task** captures a task from anywhere without leaving what you're doing, and
+**Toggle OnIt** shows or hides the board. From this repo's root:
 
 ```sh
-open -g "onit://add?text=Draft%20proposal%20%40c%20%21L%20%23sales"
+mkdir -p ~/.config/raycast/scripts
+ln -sf "$(pwd)/raycast/add-onit-task.sh" "$(pwd)/raycast/open-onit.sh" ~/.config/raycast/scripts/
 ```
 
-## Raycast setup
+Then in **Raycast Settings → Extensions**, click **+ → Add Script Directory**, choose
+`~/.config/raycast/scripts` (press ⌘⇧G to type the path), and give both commands a hotkey.
+The links mean the scripts stay up to date when you pull changes.
 
-1. In OnIt: **Settings → Data → Open Raycast Script Folder** (or use `raycast/` in this repo).
-2. Copy `add-onit-task.sh` and `open-onit.sh` into a folder Raycast watches for script
-   commands (Raycast → Extensions → Script Commands → Add Directories). Make sure they're
-   executable: `chmod +x *.sh`.
-3. Assign hotkeys in Raycast: e.g. ⌥⌘Space for *Add OnIt Task* and ⌥⌘K for *Toggle OnIt*.
+---
 
-Both scripts use `open -g`, so capture never steals focus. If OnIt isn't running, the add
-command launches it silently and the task is still added.
-
-## Data
-
-Everything lives in one human-readable file:
-
-```
-~/Library/Application Support/OnIt/onit.json
-```
-
-- Writes are atomic (temp file + rename), debounced ~300 ms, and flushed on quit.
-- `onit.backup-1…3.json` are rotated once per launch.
-- A file that fails to decode is never overwritten: it's moved to `onit.corrupt-<timestamp>.json`
-  and the newest valid backup is loaded, with a one-time alert.
-- Hand edits (or a sync tool) are picked up live; the app ignores its own writes.
-- **Import** saves `onit.pre-import-<timestamp>.json` before replacing anything.
-
-## Keyboard (board focused)
-
-| Keys | Action |
-|---|---|
-| ↑ / ↓ | Select previous / next card |
-| ← / → | Select card in adjacent column |
-| ⌘← / ⌘→ | Move card to previous / next column |
-| ⌘↑ / ⌘↓ | Reorder card |
-| ⌥1…⌥5, ⌥0 | Set size XS…XL, clear size |
-| Return or E | Edit title |
-| ⌫ | Delete (undoable) |
-| ⌘Z / ⇧⌘Z | Undo / redo |
-| ⌘N | Focus "Add task…" |
-| ⌘L | Expand / collapse Later |
-| / | Focus filter |
-| ⌘1…⌘9 | Switch board (1 = All) |
-| Esc | Clear filter → cancel edit → leave text field → close (panel only) |
-| ⌘W | Close the panel or window |
-
-## Project layout
-
-```
-project.yml            XcodeGen spec
-raycast/               Raycast script commands (also bundled into the app's Resources)
-OnIt/App/          App entry, AppDelegate (URL handling), status item, panel, keyboard, windows
-OnIt/Model/        Board, TaskItem, TaskSize, Column, AppSettings, Snapshot
-OnIt/Parsing/      ShorthandParser (pure)
-OnIt/Store/        AppStore, Persistence, Undo, ArchiveSweeper, Migrations, TaskFilter
-OnIt/Capture/      URLRouter (pure)
-OnIt/Views/        Popover, Archive and Settings SwiftUI views
-OnIt/Support/      SizeStyle, colours, formatting, notifications
-OnItTests/         Swift Testing suites
-```
-
-## Notes, deviations and ambiguities
-
-The spec asked for these to be flagged rather than silently decided:
-
-1. **`NSStatusItem` + `NSPanel` instead of `MenuBarExtra`.** §5 allows this. `MenuBarExtra` can't be
-   opened programmatically (`open`/`toggle`), resized, or given a right-click menu, and has no badge
-   API. The popover is a non-activating, resizable `NSPanel` hosting SwiftUI (`RootView`); it closes on
-   outside clicks or Esc, and remembers its size in `UserDefaults` (UI state, not user data).
-2. **Settings and Archive are AppKit-hosted SwiftUI windows, not the `Settings` scene.**
-   `openSettings` only works from views inside SwiftUI scenes, and the popover is AppKit-hosted. The
-   activation-policy approach from gotcha 3 is kept: `.regular` while a window is open, back to
-   `.accessory` when it closes. ⌘, is redirected to the same window.
-3. **Unknown-board warnings always notify**, even with "Notify when a task is added" off. Otherwise
-   a mistyped `@board` from Raycast would only show as an icon pulse. Failures always notify, as specified.
-4. **§9.6 doesn't exist** (it's referenced for board-deletion undo). Board deletion is on the normal
-   ⌘Z stack, and Settings shows an **Undo** banner for 10 seconds after a delete.
-5. **Undo is stored as before/after states** of boards and tasks (capped at 50), not hand-written
-   inverse operations. It's simpler and can't drift out of sync. Settings, and board
-   rename/colour/alias edits, aren't undoable, because per-keystroke renames would flood the stack.
-   History is cleared when an external file change is loaded.
-6. **Ordering is per column across all boards.** This is a superset of "within (board, column)", so the
-   All view and single-board views always agree on order.
-7. **Aliases also may not collide with another board's name slug**, because `@name` resolves too.
-   Aliases are checked before names.
-8. **Editing an existing title** pre-fills it with escapes (`\@acme`) for any word that would otherwise
-   be re-parsed as a token, so committing an unchanged title is lossless. An edit that's only tokens
-   (`!l`) keeps the title and applies the tokens. `@board` in an edit moves the card.
-9. **Filters:** text terms must all match (title or tags; `#term` matches tags only). Selected tags and
-   sizes match *any* (OR). The size filter includes "unsized".
-10. **Starting boards are Home (`@home`, `@h`) and Work (`@work`, `@w`)**, not the spec's Internal and Client.
-    Work is the default board. Each starts with one plain example task ("Pick up dry cleaning" on Home,
-    "Reply to the project update email" on Work) instead of the spec's Raycast welcome card.
-11. **Acceptance criterion 1 uses `@acme`**, which isn't a starting board. Add an Acme board
-    (or an `acme` alias) first, or try `@home`.
-12. **Tests run hosted in the app.** `AppDelegate` detects the XCTest environment and uses an in-memory
-    store, so tests never touch your real data file or menu bar.
-
-## Verification status
-
-Verified automatically (85 tests) and by hand on the built app: the parser table and edge cases,
-store operations, ordering and renormalisation, undo/redo, board invariants, archive sweep with an
-injected clock, persistence round-trip, backup rotation, corruption recovery, file watching, and
-URL routing. Also verified on the built app: cold launch via the Raycast script adds the task
-without a Dock icon, warm adds, unknown-board and empty-title handling, UTF-8, `+` and `%`
-round-trips, and live pickup of hand edits. The board UI was rendered offscreen in light and dark
-mode to check layout.
-
-**Not yet exercised interactively** (needs a person at the keyboard): drag and drop, the keyboard
-map and popover focus behaviour, the right-click menu, the Settings and Archive windows,
-notification banners, and launch at login.
+<sub>Your data lives in `~/Library/Application Support/OnIt/onit.json`. Automation: `onit://add?text=…`,
+`onit://open` and `onit://toggle`. Developers: run tests with `xcodebuild -scheme OnIt -destination 'platform=macOS' test`.
+Design decisions are in [`docs/IMPLEMENTATION_NOTES.md`](docs/IMPLEMENTATION_NOTES.md); the original
+brief is [`STACKBAN_SPEC.md`](STACKBAN_SPEC.md).</sub>
