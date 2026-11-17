@@ -11,7 +11,7 @@ A native macOS board for all the small things you've said you'll do.</p>
 
 “Can you send that over?” *On it.* “Could you take a look?” *On it.*
 
-Small asks land all day, at work and at home, and they live in your head until one slips. OnIt gives them
+Small asks land all day, from every direction, and they live in your head until one slips. OnIt gives them
 somewhere to go. Type one line and it's on your board, sized and sorted. At a glance you can see what's
 waiting, what you're doing, what you finished this week, and whether you've taken on too much.
 
@@ -28,20 +28,20 @@ waiting, what you're doing, what you finished this week, and whether you've take
   </tr>
 </table>
 
-## Home and work, kept apart
+## Separate boards, kept apart
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/onit-home.png" alt="OnIt showing only the Home board"></td>
-    <td width="50%"><img src="docs/screenshots/onit-work.png" alt="OnIt showing only the Work board"></td>
+    <td width="50%"><img src="docs/screenshots/onit-home.png" alt="OnIt showing a single board on its own"></td>
+    <td width="50%"><img src="docs/screenshots/onit-work.png" alt="OnIt showing a different board on its own"></td>
   </tr>
   <tr>
-    <td align="center"><b>Home</b>: errands, admin, plans.</td>
-    <td align="center"><b>Work</b>: everything you've said yes to.</td>
+    <td align="center" colspan="2">Give each area its own board (a client, a project, a side hustle, home), each with its own colour.</td>
   </tr>
 </table>
 
-Switch boards with one click (or ⌘1–⌘9), see them all together in **All**, and add as many boards as you like.
+Look at one board at a time, or all of them together in **All**. Switch with one click or ⌘1–⌘9.
+OnIt starts you off with *Home* and *Work*; rename them, recolour them, or add as many as you like.
 
 ## What makes it different
 
