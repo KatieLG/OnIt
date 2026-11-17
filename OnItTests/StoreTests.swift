@@ -34,7 +34,8 @@ struct StoreTests {
         #expect(seed.boards[0].aliases == ["home", "h"])
         #expect(seed.boards[1].aliases == ["work", "w"])
         #expect(seed.tasks.map(\.boardId) == seed.boards.map(\.id))
-        #expect(seed.tasks.allSatisfy { $0.column == .todo && $0.size == nil && $0.tags.isEmpty })
+        #expect(seed.tasks.map(\.size) == [.m, .s])
+        #expect(seed.tasks.allSatisfy { $0.column == .todo && $0.tags.isEmpty })
         // Plain titles: no shorthand tokens or app references.
         let parsed = seed.tasks.map { ShorthandParser.parse($0.title, knownBoards: seed.boards.map(BoardAliasEntry.init(board:))) }
         #expect(zip(parsed, seed.tasks).allSatisfy { $0.title == $1.title && $0.boardId == nil })

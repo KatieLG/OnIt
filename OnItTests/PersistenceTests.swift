@@ -51,7 +51,7 @@ struct PersistenceTests {
         let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(json["schemaVersion"] as? Int == 1)
         let task = try #require((json["tasks"] as? [[String: Any]])?.first)
-        #expect(task["size"] is NSNull)
+        #expect(task["size"] as? String == "m")
         #expect(task["startedAt"] is NSNull)
         #expect(task["column"] as? String == "todo")
         #expect(task["createdAt"] as? String == "1970-01-01T00:00:00Z")

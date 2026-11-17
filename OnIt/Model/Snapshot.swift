@@ -39,10 +39,10 @@ struct Snapshot: Codable, Equatable, Sendable {
             name: "Work", aliases: ["work", "w"], colorHex: "#5B8DEF", isDefault: true, sortOrder: 1
         )
         let homeTask = TaskItem(
-            boardId: home.id, title: "Pick up dry cleaning", column: .todo, order: 1024, createdAt: now
+            boardId: home.id, title: "Pick up dry cleaning", size: .m, column: .todo, order: 1024, createdAt: now
         )
         let workTask = TaskItem(
-            boardId: work.id, title: "Reply to the project update email", column: .todo, order: 2048, createdAt: now
+            boardId: work.id, title: "Reply to the project update email", size: .s, column: .todo, order: 2048, createdAt: now
         )
         return Snapshot(boards: [home, work], tasks: [homeTask, workTask])
     }
