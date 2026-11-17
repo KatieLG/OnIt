@@ -72,6 +72,8 @@ final class PanelController: NSObject, NSWindowDelegate {
                 .environment(ui)
         )
         hosting.sizingOptions = []
+        // The panel's title bar is invisible, so don't let SwiftUI inset the content below it.
+        hosting.safeAreaRegions = []
         hosting.translatesAutoresizingMaskIntoConstraints = false
         effect.addSubview(hosting)
         NSLayoutConstraint.activate([
@@ -99,6 +101,7 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     func show() {
         positionPanel(size: panel.frame.size)
+        if anchorFrame == nil { repositionWhenAnchorIsReady() }
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate()
         installMonitors()
@@ -154,6 +157,29 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     // MARK: Geometry
 
+    /// After a cold launch the status item takes a moment to be placed in the menu bar; until then
+    /// the panel sits at the top-right fallback. Move it under the icon as soon as that's known.
+    private func repositionWhenAnchorIsReady(attempt: Int = 0) {
+        guard attempt < 20 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) { [weak self] in
+            guard let self, self.panel.isVisible else { return }
+            if self.anchorFrame != nil {
+                self.positionPanel(size: self.panel.frame.size)
+            } else {
+                self.repositionWhenAnchorIsReady(attempt: attempt + 1)
+            }
+        }
+    }
+
+    /// The status item's frame in screen coordinates, or nil if it isn't laid out in the menu bar
+    /// yet. Right after a cold launch (e.g. from `onit://open`) its window can still be at the origin.
+    private var anchorFrame: NSRect? {
+        guard let window = anchorButton?.window, let screen = window.screen else { return nil }
+        let frame = window.frame
+        guard frame.width > 0, frame.minY >= screen.visibleFrame.maxY - 4 else { return nil }
+        return frame
+    }
+
     private func positionPanel(size: NSSize) {
         let screen = anchorButton?.window?.screen ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return }
@@ -163,8 +189,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         size.height = min(max(size.height, PanelMetrics.minSize.height), visible.height - 16)
 
         var origin: NSPoint
-        if let buttonWindow = anchorButton?.window {
-            let buttonFrame = buttonWindow.frame
+        if let buttonFrame = anchorFrame {
             origin = NSPoint(x: buttonFrame.midX - size.width / 2, y: buttonFrame.minY - size.height - 6)
         } else {
             origin = NSPoint(x: visible.maxX - size.width - 8, y: visible.maxY - size.height - 6)
@@ -207,7 +232,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         let visible = screen?.visibleFrame ?? current
         let width = min(max(size.width, PanelMetrics.minSize.width), min(PanelMetrics.maxSize.width, visible.width - 16))
         var x = current.midX - width / 2
-        if let buttonWindow = anchorButton?.window { x = buttonWindow.frame.midX - width / 2 }
+        if let buttonFrame = anchorFrame { x = buttonFrame.midX - width / 2 }
         x = min(max(x, visible.minX + 8), visible.maxX - width - 8)
         return NSRect(x: x, y: current.maxY - size.height, width: width, height: size.height)
     }
