@@ -42,6 +42,10 @@ struct TopBar: View {
                 $0.map { "\($0.label) · \(SizeStyle.meaning($0))" } ?? "Unsized"
             }
             FilterMenu(title: "#Tag", options: store.allTags, selection: $ui.filter.tags) { "#\($0)" }
+            Button { ui.openSettings() } label: { Image(systemName: "gearshape") }
+                .buttonStyle(.borderless)
+                .help("Settings (⌘,)")
+                .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
