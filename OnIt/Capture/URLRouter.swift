@@ -1,97 +1,34 @@
 import Foundation
 
 enum URLAction: Equatable, Sendable {
-    case add(text: String)
-    /// `board` is the raw alias from `?board=`, if any.
-    case open(board: String?)
-    case toggle
-    case invalid(reason: String)
+    case add(String), open(board: String?), toggle, invalid(String)
 }
 
-/// Turns `onit://` URLs into actions. Pure; no side effects.
+/// Turns `onit://` links into actions. Parsed by hand so `+` stays a literal plus and bad
+/// percent-escapes are reported rather than dropped.
 enum URLRouter {
-    static let scheme = "onit"
+    static func route(_ url: URL) -> URLAction { route(url.absoluteString) }
 
-    static func route(_ url: URL) -> URLAction {
-        route(url.absoluteString)
-    }
-
-    /// Parses the URL string by hand so that `+` stays a literal plus and malformed
-    /// percent-escapes are reported rather than silently dropped.
     static func route(_ string: String) -> URLAction {
-        guard let colon = string.firstIndex(of: ":") else {
-            return .invalid(reason: "Not a onit:// link.")
+        let parts = string.split(separator: ":", maxSplits: 1)
+        guard parts.count == 2, parts[0].lowercased() == "onit" else { return .invalid("That isn't an onit:// link.") }
+        let link = parts[1].drop { $0 == "/" }.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)[0]
+        let pathAndQuery = link.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        var params: [String: String] = [:]
+        for pair in pathAndQuery.dropFirst().first?.split(separator: "&") ?? [] {
+            let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard let key = kv[0].removingPercentEncoding?.lowercased(),
+                  let value = (kv.count > 1 ? kv[1] : "").removingPercentEncoding
+            else { return .invalid("The link wasn't valid percent-encoded UTF-8.") }
+            params[key] = params[key] ?? value // first one wins
         }
-        guard string[..<colon].lowercased() == scheme else {
-            return .invalid(reason: "Not a onit:// link.")
-        }
-
-        var rest = string[string.index(after: colon)...]
-        while rest.hasPrefix("/") { rest = rest.dropFirst() }
-
-        let (pathPart, queryPart): (Substring, Substring?) = {
-            if let q = rest.firstIndex(of: "?") {
-                return (rest[..<q], rest[rest.index(after: q)...])
-            }
-            return (rest, nil)
-        }()
-
-        // Drop any fragment from the query.
-        let query = queryPart.map { part -> Substring in
-            if let hash = part.firstIndex(of: "#") { return part[..<hash] }
-            return part
-        }
-
-        let command = pathPart
-            .split(separator: "/", omittingEmptySubsequences: true)
-            .first.map { String($0).lowercased() } ?? ""
-
-        let params: [String: String]
-        switch parseQuery(query) {
-        case .success(let parsed): params = parsed
-        case .failure(let reason): return .invalid(reason: reason)
-        }
-
-        switch command {
-        case "add":
-            guard let text = params["text"] else {
-                return .invalid(reason: "The add link had no text parameter.")
-            }
-            return .add(text: text)
+        switch pathAndQuery[0].split(separator: "/").first?.lowercased() ?? "" {
+        case "add": return params["text"].map(URLAction.add) ?? .invalid("The add link had no text.")
+        case "toggle": return .toggle
         case "open":
-            let board = params["board"].map { $0.hasPrefix("@") ? String($0.dropFirst()) : $0 }
-            return .open(board: board?.isEmpty == true ? nil : board)
-        case "toggle":
-            return .toggle
-        case "":
-            return .invalid(reason: "The link had no command (expected add, open or toggle).")
-        default:
-            return .invalid(reason: "Unknown command '\(command)'.")
+            let board = params["board"].map { String($0.drop { $0 == "@" }) }
+            return .open(board: board?.isEmpty == false ? board : nil)
+        case let command: return .invalid("Unknown link “\(command)”. Expected add, open or toggle.")
         }
-    }
-
-    private enum QueryResult {
-        case success([String: String])
-        case failure(String)
-    }
-
-    /// First occurrence of each key wins. `+` is literal.
-    private static func parseQuery(_ query: Substring?) -> QueryResult {
-        guard let query, !query.isEmpty else { return .success([:]) }
-        var result: [String: String] = [:]
-        for pair in query.split(separator: "&", omittingEmptySubsequences: true) {
-            let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-            guard let rawKey = parts.first, let key = String(rawKey).removingPercentEncoding else {
-                return .failure("The link contained a malformed parameter name.")
-            }
-            let rawValue = parts.count > 1 ? String(parts[1]) : ""
-            guard let value = rawValue.removingPercentEncoding else {
-                return .failure("The '\(key)' parameter was not valid percent-encoded UTF-8.")
-            }
-            if result[key.lowercased()] == nil {
-                result[key.lowercased()] = value
-            }
-        }
-        return .success(result)
     }
 }

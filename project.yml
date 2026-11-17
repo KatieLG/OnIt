@@ -4,78 +4,40 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
-  generateEmptyDirectories: true
 
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MACOSX_DEPLOYMENT_TARGET: "14.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    ENABLE_USER_SCRIPT_SANDBOXING: YES
-    DEAD_CODE_STRIPPING: YES
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-" # sign to run locally
 
 targets:
   OnIt:
     type: application
     platform: macOS
-    sources:
-      - path: OnIt
-      - path: raycast
-        type: folder
-        buildPhase: resources
+    sources: [OnIt]
     info:
-      path: OnIt/Resources/Info.plist
+      path: OnIt/Resources/Info.plist # generated
       properties:
-        CFBundleDisplayName: OnIt
-        CFBundleName: OnIt
-        CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "1"
-        LSUIElement: true
-        LSMinimumSystemVersion: "14.0"
-        LSApplicationCategoryType: public.app-category.productivity
-        NSHumanReadableCopyright: ""
+        LSUIElement: true # menu bar app: no Dock icon until a window opens
         CFBundleURLTypes:
           - CFBundleURLName: com.example.onit
-            CFBundleURLSchemes:
-              - onit
+            CFBundleURLSchemes: [onit]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.onit
-        PRODUCT_NAME: OnIt
-        GENERATE_INFOPLIST_FILE: NO
         ENABLE_APP_SANDBOX: NO
-        ENABLE_HARDENED_RUNTIME: NO
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
-        DEVELOPMENT_TEAM: ""
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        COMBINE_HIDPI_IMAGES: YES
+    scheme:
+      testTargets: [OnItTests]
 
   OnItTests:
     type: bundle.unit-test
     platform: macOS
-    sources:
-      - path: OnItTests
+    sources: [OnItTests]
     dependencies:
       - target: OnIt
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.onit.tests
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
-        BUNDLE_LOADER: "$(TEST_HOST)"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/OnIt.app/Contents/MacOS/OnIt"
-
-schemes:
-  OnIt:
-    build:
-      targets:
-        OnIt: all
-        OnItTests: [test]
-    run:
-      config: Debug
-    test:
-      config: Debug
-      targets:
-        - OnItTests

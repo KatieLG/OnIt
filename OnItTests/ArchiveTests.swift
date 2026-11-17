@@ -4,93 +4,53 @@ import Testing
 
 @MainActor
 struct ArchiveTests {
-    let base = Date(timeIntervalSince1970: 1_800_000_000)
-    let day: TimeInterval = 86_400
+    let clock = TestClock()
+    let store: AppStore
 
-    func makeStore(now: Date) -> AppStore {
-        let snapshot = Snapshot.seed(now: base)
-        return AppStore(snapshot: Snapshot(boards: snapshot.boards, tasks: []), clock: { now })
-    }
+    init() { store = emptyStore(clock: clock) }
 
-    func doneTask(boardId: UUID, completedDaysAgo days: Double, now: Date) -> TaskItem {
-        TaskItem(boardId: boardId, title: "Done \(days)", column: .done, order: 1,
-                 createdAt: base, completedAt: now.addingTimeInterval(-days * day))
-    }
-
-    @Test func pureSweepArchivesOnlyOldDoneTasks() {
-        let now = base.addingTimeInterval(30 * day)
-        let board = UUID()
-        let old = doneTask(boardId: board, completedDaysAgo: 8, now: now)
-        let fresh = doneTask(boardId: board, completedDaysAgo: 6, now: now)
-        let exactlySeven = doneTask(boardId: board, completedDaysAgo: 7, now: now)
-        var todo = TaskItem(boardId: board, title: "Todo", column: .todo, createdAt: base)
-        todo.completedAt = now.addingTimeInterval(-20 * day) // stale field shouldn't matter outside Done
-
-        let result = ArchiveSweeper.sweep([old, fresh, exactlySeven, todo], now: now, archiveAfterDays: 7)
-        #expect(result.archived == [old.id])
-        #expect(result.tasks.first { $0.id == old.id }?.archivedAt == now)
-        #expect(result.tasks.first { $0.id == fresh.id }?.archivedAt == nil)
-        #expect(result.tasks.first { $0.id == exactlySeven.id }?.archivedAt == nil)
-        #expect(result.tasks.first { $0.id == todo.id }?.archivedAt == nil)
-    }
-
-    @Test func alreadyArchivedTasksAreNotTouched() {
-        let now = base.addingTimeInterval(30 * day)
-        var task = doneTask(boardId: UUID(), completedDaysAgo: 20, now: now)
-        task.archivedAt = base
-        let result = ArchiveSweeper.sweep([task], now: now, archiveAfterDays: 7)
-        #expect(result.archived.isEmpty)
-        #expect(result.tasks[0].archivedAt == base)
-    }
-
-    @Test func storeSweepUsesInjectedClockAndHidesTasks() {
-        let clock = TestClock(base)
-        let store = AppStore(snapshot: Snapshot(boards: Snapshot.seed().boards, tasks: []), clock: clock.closure)
-        let task = store.add(text: "Ship it").task!
+    func done(_ title: String) -> TaskItem {
+        let task = store.add(title)
         store.move(task.id, to: .done)
-        #expect(store.task(id: task.id)?.completedAt == base)
+        return task
+    }
 
+    @Test func archivesDoneTasksOlderThanTheSetting() {
+        let old = done("old")
+        clock.advance(days: 1)
+        let fresh = done("fresh")
+        let todo = store.add("todo")
         clock.advance(days: 6)
-        #expect(store.sweepArchive().isEmpty)
+        #expect(store.sweepArchive().isEmpty, "exactly 7 days isn't older than 7")
 
-        clock.advance(days: 2)
-        let archived = store.sweepArchive()
-        #expect(archived == [task.id])
-        #expect(store.task(id: task.id)?.archivedAt == clock.now)
-        #expect(store.tasks(in: .done).isEmpty)
-        #expect(store.archivedTasks.map(\.id) == [task.id])
+        clock.advance(days: 0.5)
+        #expect(store.sweepArchive() == [old.id])
+        #expect(store.task(id: old.id)?.archivedAt == clock.now)
+        #expect(store.tasks(in: .done).map(\.id) == [fresh.id])
+        #expect(store.archivedTasks.map(\.id) == [old.id])
+        #expect(store.task(id: todo.id)?.isArchived == false)
+
+        clock.advance(days: 30)
+        #expect(store.sweepArchive() == [fresh.id], "already-archived tasks aren't touched")
+        #expect(store.tasks.count == 3, "archived tasks are kept")
     }
 
     @Test func respectsConfiguredDays() {
-        let now = base.addingTimeInterval(3 * day)
-        let store = makeStore(now: base)
         store.updateSettings { $0.archiveAfterDays = 2 }
-        let task = store.add(text: "x").task!
-        store.move(task.id, to: .done)
-        #expect(store.sweepArchive(now: base.addingTimeInterval(1 * day)).isEmpty)
-        #expect(store.sweepArchive(now: now) == [task.id])
+        let task = done("x")
+        clock.advance(days: 1)
+        #expect(store.sweepArchive().isEmpty)
+        clock.advance(days: 2)
+        #expect(store.sweepArchive() == [task.id])
     }
 
     @Test func restoreBringsTaskBackToTodo() {
-        let store = makeStore(now: base)
-        let task = store.add(text: "x").task!
-        store.move(task.id, to: .done)
-        store.sweepArchive(now: base.addingTimeInterval(10 * day))
-        #expect(store.task(id: task.id)?.isArchived == true)
-
+        let task = done("x")
+        clock.advance(days: 10)
+        store.sweepArchive()
         store.restore(task.id)
         let restored = store.task(id: task.id)!
-        #expect(restored.column == .todo)
-        #expect(restored.archivedAt == nil)
-        #expect(restored.completedAt == nil)
+        #expect(restored.column == .todo && restored.archivedAt == nil && restored.completedAt == nil)
         #expect(store.tasks(in: .todo).map(\.id) == [task.id])
-    }
-
-    @Test func archivedTasksAreKeptNotDeleted() {
-        let store = makeStore(now: base)
-        let task = store.add(text: "x").task!
-        store.move(task.id, to: .done)
-        store.sweepArchive(now: base.addingTimeInterval(10 * day))
-        #expect(store.tasks.count == 1)
     }
 }

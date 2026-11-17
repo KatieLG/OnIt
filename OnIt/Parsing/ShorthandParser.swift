@@ -1,166 +1,77 @@
 import Foundation
 
-/// What the parser needs to know about one board to resolve `@alias` tokens.
-struct BoardAliasEntry: Equatable, Sendable {
-    var boardId: UUID
-    /// The board name in slug form ("Acme Co" → "acme-co").
-    var nameSlug: String
-    /// Lowercase aliases.
-    var aliases: [String]
-
-    init(boardId: UUID, nameSlug: String, aliases: [String]) {
-        self.boardId = boardId
-        self.nameSlug = nameSlug.lowercased()
-        self.aliases = aliases.map { $0.lowercased() }
-    }
-
-    init(board: Board) {
-        self.init(boardId: board.id, nameSlug: board.nameSlug, aliases: board.aliases)
-    }
-}
-
 struct ParsedTask: Equatable, Sendable {
-    var title: String
-    /// Raw alias as typed (without `@`), nil if no board token resolved.
-    var boardAlias: String?
-    /// The resolved board, nil if absent or unknown.
+    var title = ""
     var boardId: UUID?
-    /// nil if no `!size` token was given.
     var size: TaskSize?
-    var tags: [String]
-    /// Set when an `@alias` was given but did not resolve and no other board token did.
+    var tags: [String] = []
+    /// An `@alias` that matched no board, reported only when no other board token matched.
     var unknownBoardAlias: String?
-
-    var isEmpty: Bool { title.isEmpty }
 }
 
 /// Pure shorthand parser: `Draft proposal @acme !L #sales`.
 enum ShorthandParser {
     static let titleLimit = 280
-    /// Inputs beyond this are cut before tokenising, as a guard against pathological input.
-    static let inputLimit = 20_000
 
-    private static let sigils: Set<Character> = ["@", "!", "#"]
+    private enum Token { case board(UUID), size(TaskSize), tag(String) }
 
-    static func parse(_ input: String, knownBoards: [BoardAliasEntry]) -> ParsedTask {
-        let input = input.count > inputLimit ? String(input.prefix(inputLimit)) : input
+    /// What a word means as shorthand, or nil if it's plain title text.
+    private static func token(_ word: Substring, boards: [Board]) -> Token? {
+        let body = String(word.dropFirst())
+        switch word.first {
+        case "@": return resolveBoard(body, in: boards).map(Token.board)
+        case "!": return TaskSize(rawValue: body.lowercased()).map(Token.size)
+        case "#": return isWord(body) ? .tag(body.lowercased()) : nil
+        default: return nil
+        }
+    }
 
-        var titleWords: [Substring] = []
-        var boardAlias: String?
-        var boardId: UUID?
-        var unknownAlias: String?
-        var size: TaskSize?
-        var tags: [String] = []
-
-        for word in input.split(whereSeparator: { $0.isWhitespace }) {
-            guard let first = word.first else { continue }
-
-            // `\@acme` → literal `@acme`.
-            if first == "\\", word.count > 1, sigils.contains(word[word.index(after: word.startIndex)]) {
-                titleWords.append(word.dropFirst())
+    static func parse(_ input: String, boards: [Board]) -> ParsedTask {
+        var result = ParsedTask(), words: [Substring] = [], unknown: String?
+        for word in input.prefix(20_000).split(whereSeparator: \.isWhitespace) {
+            // `\@acme` keeps the sigil literally.
+            if word.first == "\\", let next = word.dropFirst().first, "@!#".contains(next) {
+                words.append(word.dropFirst())
                 continue
             }
-
-            let body = String(word.dropFirst())
-            switch first {
-            case "@":
-                if !body.isEmpty, let id = resolveBoard(body, in: knownBoards) {
-                    boardAlias = body
-                    boardId = id
-                } else {
-                    titleWords.append(word)
-                    if isAliasSyntax(body) { unknownAlias = body }
-                }
-            case "!":
-                if let parsed = TaskSize(shorthand: body) {
-                    size = parsed
-                } else {
-                    titleWords.append(word)
-                }
-            case "#":
-                if isTagSyntax(body) {
-                    let tag = body.lowercased()
-                    if !tags.contains(tag) { tags.append(tag) }
-                } else {
-                    titleWords.append(word)
-                }
-            default:
-                titleWords.append(word)
+            switch token(word, boards: boards) {
+            case .board(let id): result.boardId = id
+            case .size(let size): result.size = size
+            case .tag(let tag): if !result.tags.contains(tag) { result.tags.append(tag) }
+            case nil:
+                words.append(word)
+                if word.first == "@", isWord(word.dropFirst()) { unknown = String(word.dropFirst()) }
             }
         }
-
-        var title = titleWords.joined(separator: " ")
-        if title.count > titleLimit {
-            title = String(title.prefix(titleLimit))
-            title = title.trimmingCharacters(in: .whitespaces)
-        }
-
-        return ParsedTask(
-            title: title,
-            boardAlias: boardAlias,
-            boardId: boardId,
-            size: size,
-            tags: tags,
-            unknownBoardAlias: boardId == nil ? unknownAlias : nil
-        )
-    }
-
-    /// Aliases are matched before board names so an explicit alias always wins.
-    static func resolveBoard(_ alias: String, in boards: [BoardAliasEntry]) -> UUID? {
-        let key = alias.lowercased()
-        if let match = boards.first(where: { $0.aliases.contains(key) }) { return match.boardId }
-        if let match = boards.first(where: { $0.nameSlug == key }) { return match.boardId }
-        return nil
-    }
-
-    /// Normalises free-form tag input ("#Urgent, invoice") into stored tags.
-    static func normaliseTags(_ input: String) -> [String] {
-        var result: [String] = []
-        for raw in input.split(whereSeparator: { $0.isWhitespace || $0 == "," }) {
-            let body = raw.hasPrefix("#") ? String(raw.dropFirst()) : String(raw)
-            guard isTagSyntax(body) else { continue }
-            let tag = body.lowercased()
-            if !result.contains(tag) { result.append(tag) }
-        }
+        result.title = String(words.joined(separator: " ").prefix(titleLimit)).trimmingCharacters(in: .whitespaces)
+        result.unknownBoardAlias = result.boardId == nil ? unknown : nil
         return result
     }
 
-    /// Prepares an existing title for the inline editor: words that would otherwise be
-    /// re-interpreted as tokens get a backslash, so committing an unchanged title is lossless.
-    static func escapeForEditing(_ title: String, knownBoards: [BoardAliasEntry]) -> String {
-        title.split(separator: " ", omittingEmptySubsequences: false).map { word -> String in
-            guard let first = word.first else { return String(word) }
-            let body = String(word.dropFirst())
-            let wouldParse: Bool
-            switch first {
-            case "@": wouldParse = !body.isEmpty && resolveBoard(body, in: knownBoards) != nil
-            case "!": wouldParse = TaskSize(shorthand: body) != nil
-            case "#": wouldParse = isTagSyntax(body)
-            default: wouldParse = false
-            }
-            return wouldParse ? "\\" + word : String(word)
-        }.joined(separator: " ")
+    /// Aliases win over board names.
+    static func resolveBoard(_ alias: String, in boards: [Board]) -> UUID? {
+        let key = alias.lowercased()
+        guard !key.isEmpty else { return nil }
+        return (boards.first { $0.aliases.contains(key) } ?? boards.first { $0.nameSlug == key })?.id
     }
 
-    // MARK: Character classes
-
-    static func isTagSyntax(_ body: String) -> Bool {
-        !body.isEmpty && body.unicodeScalars.allSatisfy(isWordScalar)
-    }
-
-    static func isAliasSyntax(_ body: String) -> Bool {
-        isTagSyntax(body)
-    }
-
-    /// `[a-z0-9_-]+` after lowercasing: what a stored alias may contain.
-    static func isValidStoredAlias(_ alias: String) -> Bool {
-        alias == alias.lowercased() && isTagSyntax(alias)
-    }
-
-    private static func isWordScalar(_ scalar: Unicode.Scalar) -> Bool {
-        switch scalar {
-        case "a"..."z", "A"..."Z", "0"..."9", "_", "-": true
-        default: false
+    /// "#Urgent, invoice" → ["urgent", "invoice"].
+    static func normaliseTags(_ input: String) -> [String] {
+        input.split { $0.isWhitespace || $0 == "," }.reduce(into: []) { tags, raw in
+            let tag = raw.drop { $0 == "#" }.lowercased()
+            if isWord(tag), !tags.contains(tag) { tags.append(tag) }
         }
+    }
+
+    /// Escapes words that would re-parse as tokens, so re-committing an unchanged title is lossless.
+    static func escapeForEditing(_ title: String, boards: [Board]) -> String {
+        title.split(separator: " ", omittingEmptySubsequences: false)
+            .map { token($0, boards: boards) == nil ? String($0) : "\\" + $0 }
+            .joined(separator: " ")
+    }
+
+    /// `[A-Za-z0-9_-]+`: what tags and aliases may contain.
+    static func isWord(_ text: some StringProtocol) -> Bool {
+        !text.isEmpty && text.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
     }
 }

@@ -86,6 +86,4 @@ The links mean the scripts stay up to date when you pull changes.
 ---
 
 <sub>Your data lives in `~/Library/Application Support/OnIt/onit.json`. Automation: `onit://add?text=…`,
-`onit://open` and `onit://toggle`. Developers: run tests with `xcodebuild -scheme OnIt -destination 'platform=macOS' test`.
-Design decisions are in [`docs/IMPLEMENTATION_NOTES.md`](docs/IMPLEMENTATION_NOTES.md); the original
-brief is [`STACKBAN_SPEC.md`](STACKBAN_SPEC.md).</sub>
+`onit://open` and `onit://toggle`. Developers: run tests with `xcodebuild -scheme OnIt -destination 'platform=macOS' test`.</sub>

@@ -1,314 +1,114 @@
 import Foundation
-import os
 
-/// Owns `onit.json`: atomic writes, backup rotation, corruption recovery and
-/// external-change watching. All file I/O after launch happens on `ioQueue`.
+/// Owns `onit.json`: atomic writes, backups, corruption recovery, and watching for outside edits.
+/// After launch, all file I/O runs on `queue`.
 final class Persistence: @unchecked Sendable {
-    enum LoadOutcome: Equatable, Sendable {
-        /// The file existed and decoded.
-        case loaded(Snapshot)
-        /// No file existed; seed data was written.
-        case created(Snapshot)
-        /// The file failed to decode. It was moved to `corruptFile`, and data was restored from
-        /// `backup` (or seed data if no valid backup existed).
-        case recovered(Snapshot, corruptFile: URL, backup: URL?)
-
-        var snapshot: Snapshot {
-            switch self {
-            case .loaded(let s), .created(let s), .recovered(let s, _, _): s
-            }
-        }
-    }
-
-    static let fileName = "onit.json"
-    static let backupCount = 3
-
-    static var defaultDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "OnIt", directoryHint: .isDirectory)
-    }
-
     let directory: URL
-    var fileURL: URL { directory.appending(path: Self.fileName) }
+    var fileURL: URL { directory.appending(path: "onit.json") }
+    func backupURL(_ n: Int) -> URL { directory.appending(path: "onit.backup-\(n).json") }
 
-    func backupURL(_ index: Int) -> URL {
-        directory.appending(path: "onit.backup-\(index).json")
-    }
-
-    private let ioQueue = DispatchQueue(label: "com.example.onit.persistence", qos: .utility)
-    private let logger = Logger(subsystem: "com.example.onit", category: "persistence")
-
-    // Guarded by `lock`: the bytes most recently written by us or read from disk.
-    private let lock = NSLock()
-    private var lastKnownData: Data?
-
-    // Confined to `ioQueue`.
-    private var directorySource: DispatchSourceFileSystemObject?
-    private var fileSource: DispatchSourceFileSystemObject?
+    private let queue = DispatchQueue(label: "onit.persistence", qos: .utility)
+    // Confined to `queue`.
+    private var lastKnownData: Data? // what we last wrote or read, so our own writes aren't "outside edits"
+    private var sources: [DispatchSourceFileSystemObject] = []
     private var pendingCheck: DispatchWorkItem?
-    private var changeHandler: (@Sendable (Snapshot) -> Void)?
+    private var onChange: (@Sendable (Snapshot) -> Void)?
 
-    init(directory: URL = Persistence.defaultDirectory) {
+    init(directory: URL = .applicationSupportDirectory.appending(path: "OnIt")) {
         self.directory = directory
     }
 
-    deinit {
-        directorySource?.cancel()
-        fileSource?.cancel()
-    }
+    deinit { sources.forEach { $0.cancel() } }
 
-    // MARK: Legacy data (app was previously called Stackban)
-
-    static var legacyDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "Stackban", directoryHint: .isDirectory)
-    }
-
-    /// Copies data from the pre-rename `Stackban` folder into `directory`, renaming
-    /// `stackban.*.json` files to `onit.*.json`. Runs only if `directory` has no data file yet,
-    /// and never touches the legacy folder, so it can be deleted by hand once you're happy.
-    /// Returns the names of the files copied.
-    @discardableResult
-    func importLegacyDataIfNeeded(from legacy: URL = Persistence.legacyDirectory) -> [String] {
-        let fm = FileManager.default
-        guard !fm.fileExists(atPath: fileURL.path),
-              fm.fileExists(atPath: legacy.appending(path: "stackban.json").path),
-              let names = try? fm.contentsOfDirectory(atPath: legacy.path) else { return [] }
-        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        var copied: [String] = []
-        for name in names where name.hasPrefix("stackban.") && name.hasSuffix(".json") {
-            let newName = "onit." + name.dropFirst("stackban.".count)
-            do {
-                try fm.copyItem(at: legacy.appending(path: name), to: directory.appending(path: newName))
-                copied.append(newName)
-            } catch {
-                logger.error("Couldn't copy legacy file \(name): \(error.localizedDescription)")
-            }
-        }
-        logger.notice("Imported \(copied.count) file(s) from the Stackban data folder")
-        return copied
-    }
-
-    // MARK: Loading
-
-    /// Loads (or creates) the data file. Synchronous: called once at launch before any UI exists.
-    func load(seed: () -> Snapshot) -> LoadOutcome {
-        let fm = FileManager.default
-        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        guard fm.fileExists(atPath: fileURL.path) else {
-            let snapshot = seed()
-            writeNow(snapshot)
-            return .created(snapshot)
-        }
-
+    /// Loads the file, creating it from `seed` if missing, and rotates the three backups. A file that
+    /// won't decode is copied aside (never lost) and the newest valid backup restored; `recovery`
+    /// then explains what happened.
+    func load(seed: () -> Snapshot) -> (snapshot: Snapshot, recovery: String?) {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return (save(seed()), nil) }
         if let data = try? Data(contentsOf: fileURL), let snapshot = try? Snapshot.decode(data) {
-            setLastKnown(data)
+            queue.sync { lastKnownData = data }
             rotateBackups()
-            return .loaded(snapshot)
+            return (snapshot, nil)
         }
-
-        // Corrupt or unreadable: never overwrite it. Move it aside and recover.
-        let corruptURL = uniqueURL(base: "onit.corrupt-\(Self.timestamp())")
-        do {
-            try fm.moveItem(at: fileURL, to: corruptURL)
-        } catch {
-            logger.error("Could not move corrupt data file aside: \(error.localizedDescription)")
-            // Fall back to a copy so the original bytes survive the rewrite below.
-            try? fm.copyItem(at: fileURL, to: corruptURL)
-        }
-
-        for index in 1...Self.backupCount {
-            let url = backupURL(index)
-            if let data = try? Data(contentsOf: url), let snapshot = try? Snapshot.decode(data) {
-                logger.notice("Recovered data from \(url.lastPathComponent)")
-                writeNow(snapshot)
-                return .recovered(snapshot, corruptFile: corruptURL, backup: url)
+        let corrupt = copyAside("corrupt").lastPathComponent
+        for n in 1...3 {
+            if let data = try? Data(contentsOf: backupURL(n)), let snapshot = try? Snapshot.decode(data) {
+                return (save(snapshot), "OnIt's data file couldn't be read, so it was restored from a backup. The unreadable file was kept as \(corrupt).")
             }
         }
-
-        logger.error("No valid backup found; starting from seed data")
-        let snapshot = seed()
-        writeNow(snapshot)
-        return .recovered(snapshot, corruptFile: corruptURL, backup: nil)
+        return (save(seed()), "OnIt's data file couldn't be read and there was no usable backup, so OnIt started fresh. The unreadable file was kept as \(corrupt).")
     }
 
-    /// Shifts `backup-1…-2` up one slot and copies the current file into `backup-1`.
-    /// Called at most once per launch (from `load`).
-    func rotateBackups() {
+    private func save(_ snapshot: Snapshot) -> Snapshot {
+        if let data = try? snapshot.encoded() { write(data, sync: true) }
+        return snapshot
+    }
+
+    private func rotateBackups() {
         let fm = FileManager.default
-        try? fm.removeItem(at: backupURL(Self.backupCount))
-        for index in stride(from: Self.backupCount - 1, through: 1, by: -1) {
-            let from = backupURL(index)
-            if fm.fileExists(atPath: from.path) {
-                try? fm.moveItem(at: from, to: backupURL(index + 1))
-            }
-        }
-        do {
-            try fm.copyItem(at: fileURL, to: backupURL(1))
-        } catch {
-            logger.error("Backup rotation failed: \(error.localizedDescription)")
-        }
+        try? fm.removeItem(at: backupURL(3))
+        for n in [2, 1] { try? fm.moveItem(at: backupURL(n), to: backupURL(n + 1)) }
+        try? fm.copyItem(at: fileURL, to: backupURL(1))
     }
 
-    /// Saves a copy of the current file before a destructive import.
+    /// Copies the data file to `onit.<label>-<timestamp>.json`, e.g. before an import.
     @discardableResult
-    func writePreImportBackup() -> URL? {
-        let url = uniqueURL(base: "onit.pre-import-\(Self.timestamp())")
-        return ioQueue.sync {
-            do {
-                try FileManager.default.copyItem(at: fileURL, to: url)
-                return url
-            } catch {
-                logger.error("Pre-import backup failed: \(error.localizedDescription)")
-                return nil
-            }
+    func copyAside(_ label: String) -> URL {
+        let url = directory.appending(path: "onit.\(label)-\(Int(Date().timeIntervalSince1970 * 1000)).json")
+        queue.sync { _ = try? FileManager.default.copyItem(at: fileURL, to: url) }
+        return url
+    }
+
+    /// Writes atomically (temp file, then rename). `sync` waits for it, and for any queued writes.
+    func write(_ data: Data, sync: Bool = false) {
+        let work: @Sendable () -> Void = { [self] in
+            lastKnownData = data
+            try? data.write(to: fileURL, options: .atomic)
+        }
+        sync ? queue.sync(execute: work) : queue.async(execute: work)
+    }
+
+    /// Calls `handler` when something other than OnIt changes the file (a text editor, a sync tool).
+    func watch(_ handler: @escaping @Sendable (Snapshot) -> Void) {
+        queue.async { [self] in
+            onChange = handler
+            rearm()
         }
     }
 
-    // MARK: Writing
-
-    /// Queues an atomic write on the I/O queue.
-    func write(_ data: Data) {
-        ioQueue.async { [self] in
-            writeAtomically(data)
+    /// Watches the folder (renames, new files) and the file itself (in-place edits). Atomic saves
+    /// replace the file, so this re-arms after every check.
+    private func rearm() {
+        sources.forEach { $0.cancel() }
+        sources = [directory.path, fileURL.path].compactMap { path in
+            let fd = open(path, O_EVTONLY)
+            guard fd >= 0 else { return nil }
+            let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .rename, .delete], queue: queue)
+            source.setEventHandler { [weak self] in self?.scheduleCheck() }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            return source
         }
-    }
-
-    /// Writes synchronously (termination, launch). Waits for any queued writes first.
-    func writeSync(_ data: Data) {
-        ioQueue.sync {
-            writeAtomically(data)
-        }
-    }
-
-    private func writeNow(_ snapshot: Snapshot) {
-        guard let data = try? snapshot.encoded() else { return }
-        writeSync(data)
-    }
-
-    /// Writes to a temporary file in the same directory, then renames it over the real file.
-    private func writeAtomically(_ data: Data) {
-        let tempURL = directory.appending(path: ".onit.json.\(UUID().uuidString).tmp")
-        do {
-            try data.write(to: tempURL)
-            // Record before the rename so the watcher recognises its own write.
-            setLastKnown(data)
-            if rename(tempURL.path, fileURL.path) != 0 {
-                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-            }
-        } catch {
-            try? FileManager.default.removeItem(at: tempURL)
-            logger.error("Write failed: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: Watching
-
-    /// Watches for changes made by anything other than this app (hand edits, sync tools)
-    /// and calls `handler` with the newly decoded snapshot. Our own writes are ignored.
-    func startWatching(_ handler: @escaping @Sendable (Snapshot) -> Void) {
-        ioQueue.async { [self] in
-            changeHandler = handler
-            armDirectorySource()
-            armFileSource()
-        }
-    }
-
-    func stopWatching() {
-        ioQueue.sync {
-            directorySource?.cancel()
-            directorySource = nil
-            fileSource?.cancel()
-            fileSource = nil
-            changeHandler = nil
-        }
-    }
-
-    private func armDirectorySource() {
-        directorySource?.cancel()
-        let fd = open(directory.path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd, eventMask: [.write, .rename, .delete], queue: ioQueue
-        )
-        source.setEventHandler { [weak self] in self?.scheduleCheck() }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        directorySource = source
-    }
-
-    /// The file's inode changes on every atomic rename, so this is re-armed after each check.
-    private func armFileSource() {
-        fileSource?.cancel()
-        fileSource = nil
-        let fd = open(fileURL.path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd, eventMask: [.write, .extend, .delete, .rename, .attrib], queue: ioQueue
-        )
-        source.setEventHandler { [weak self] in self?.scheduleCheck() }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        fileSource = source
     }
 
     private func scheduleCheck() {
         pendingCheck?.cancel()
-        let item = DispatchWorkItem { [weak self] in self?.checkForExternalChange() }
+        let item = DispatchWorkItem { [weak self] in self?.check() }
         pendingCheck = item
-        ioQueue.asyncAfter(deadline: .now() + .milliseconds(250), execute: item)
+        queue.asyncAfter(deadline: .now() + 0.25, execute: item)
     }
 
-    private func checkForExternalChange() {
-        guard changeHandler != nil else { return }
-        armFileSource()
-        guard let data = try? Data(contentsOf: fileURL) else { return }
-        guard data != currentLastKnown() else { return }
-        guard let snapshot = try? Snapshot.decode(data) else {
-            // Possibly a half-written edit; the next event will try again.
-            logger.notice("External change did not decode; ignoring for now")
-            return
-        }
-        setLastKnown(data)
-        logger.info("Reloading after external change")
-        changeHandler?(snapshot)
+    /// On `queue`. Skips our own writes and files that don't decode yet (half-saved edits).
+    private func check() {
+        rearm()
+        guard let onChange, let data = try? Data(contentsOf: fileURL), data != lastKnownData,
+              let snapshot = try? Snapshot.decode(data) else { return }
+        lastKnownData = data
+        onChange(snapshot)
     }
 
-    /// Exposed for tests: runs a check immediately on the I/O queue.
-    func checkForExternalChangeNow() {
-        ioQueue.sync { checkForExternalChange() }
-    }
-
-    /// Blocks until all queued I/O has finished. Used by tests and termination.
-    func drain() {
-        ioQueue.sync {}
-    }
-
-    // MARK: Helpers
-
-    private func setLastKnown(_ data: Data) {
-        lock.withLock { lastKnownData = data }
-    }
-
-    private func currentLastKnown() -> Data? {
-        lock.withLock { lastKnownData }
-    }
-
-    /// `<base>.json`, or `<base>-2.json`, `-3`… if that name is taken.
-    private func uniqueURL(base: String) -> URL {
-        var candidate = directory.appending(path: "\(base).json")
-        var suffix = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            candidate = directory.appending(path: "\(base)-\(suffix).json")
-            suffix += 1
-        }
-        return candidate
-    }
-
-    private static func timestamp() -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return formatter.string(from: Date())
-    }
+    /// For tests: run a check now, or wait for queued I/O.
+    func checkNow() { queue.sync { check() } }
+    func drain() { queue.sync {} }
 }

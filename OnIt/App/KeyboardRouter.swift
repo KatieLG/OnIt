@@ -1,101 +1,66 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// The popover's keyboard map (spec §8.3), handled in one place at the AppKit level so it
-/// behaves the same regardless of which SwiftUI view has focus.
+/// The board's keyboard shortcuts for one window, handled at the AppKit level so they work
+/// whichever SwiftUI view has focus.
 @MainActor
 final class KeyboardRouter {
     private let ui: BoardUIState
     private weak var window: NSWindow?
-    private let close: () -> Void
     private let closesOnEscape: Bool
+    private let close: () -> Void
 
-    /// - Parameters:
-    ///   - close: Closes the hosting surface (⌘W, and before opening Settings).
-    ///   - closesOnEscape: Whether Esc with nothing left to cancel closes it (panel: yes, window: no).
     init(ui: BoardUIState, window: NSWindow, closesOnEscape: Bool, close: @escaping () -> Void) {
-        self.ui = ui
-        self.window = window
-        self.closesOnEscape = closesOnEscape
-        self.close = close
+        (self.ui, self.window, self.closesOnEscape, self.close) = (ui, window, closesOnEscape, close)
+        _ = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let handled = MainActor.assumeIsolated { self.map { event.window === $0.window && $0.handle(event) } ?? false }
+            return handled ? nil : event
+        }
     }
 
-    /// True while a text field (filter, add, inline edit) is being typed into.
-    private var isTyping: Bool {
-        window?.firstResponder is NSText
-    }
-
-    /// Returns true if the event was handled and should be swallowed.
-    func handle(_ event: NSEvent) -> Bool {
+    private func handle(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .option, .shift, .control])
-        let keyCode = Int(event.keyCode)
-        let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        let key = Int(event.keyCode), chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
 
-        if keyCode == kVK_Escape {
-            if !ui.handleEscape() {
-                guard closesOnEscape else { return false }
-                close()
+        if key == kVK_Escape {
+            if ui.handleEscape() { return true }
+            if closesOnEscape { close() }
+            return closesOnEscape
+        }
+        // These work even while typing.
+        let commands: [String: @MainActor () -> Void] = [
+            "n": { self.ui.focusRequest = .field(.add) }, "l": { self.ui.toggleLater() }, "w": { self.close() },
+            ",": { if self.closesOnEscape { self.close() }; self.ui.openSettings() },
+        ]
+        if flags == .command, let digit = Int(chars), digit > 0 { ui.selectBoard(atShortcutIndex: digit); return true }
+        if flags == .command, let command = commands[chars] { command(); return true }
+        guard !(window?.firstResponder is NSText) else { return false }
+
+        let arrows = [kVK_UpArrow: -1, kVK_DownArrow: 1, kVK_LeftArrow: -1, kVK_RightArrow: 1]
+        if let delta = arrows[key], flags.isEmpty || flags == .command {
+            switch (flags == .command, key == kVK_UpArrow || key == kVK_DownArrow) {
+            case (false, true): ui.moveSelection(by: delta)
+            case (false, false): ui.moveSelectionToAdjacentColumn(delta)
+            case (true, true): ui.reorderSelected(delta)
+            case (true, false): ui.moveSelectedToAdjacentColumn(delta)
             }
             return true
         }
-
-        // Shortcuts that are safe even while typing.
-        if flags == .command {
-            if let digit = Int(chars), (1...9).contains(digit) {
-                ui.selectBoard(atShortcutIndex: digit)
-                return true
-            }
-            switch chars {
-            case "n":
-                ui.focusRequest = .field(.add)
-                return true
-            case "l":
-                ui.toggleLater()
-                return true
-            case ",":
-                if closesOnEscape { close() }
-                ui.openSettings()
-                return true
-            case "w":
-                close()
-                return true
-            default:
-                break
-            }
-        }
-
-        if isTyping { return false }
-
-        switch (flags, keyCode) {
-        case ([], kVK_UpArrow): ui.moveSelection(by: -1); return true
-        case ([], kVK_DownArrow): ui.moveSelection(by: 1); return true
-        case ([], kVK_LeftArrow): ui.moveSelectionToAdjacentColumn(-1); return true
-        case ([], kVK_RightArrow): ui.moveSelectionToAdjacentColumn(1); return true
-        case (.command, kVK_LeftArrow): ui.moveSelectedToAdjacentColumn(-1); return true
-        case (.command, kVK_RightArrow): ui.moveSelectedToAdjacentColumn(1); return true
-        case (.command, kVK_UpArrow): ui.reorderSelected(-1); return true
-        case (.command, kVK_DownArrow): ui.reorderSelected(1); return true
-        case ([], kVK_Return), ([], kVK_ANSI_KeypadEnter): ui.editSelected(); return true
-        case ([], kVK_Delete), ([], kVK_ForwardDelete): ui.deleteSelected(); return true
-        default: break
-        }
-
-        if flags == .option, let digit = Int(chars), (0...5).contains(digit) {
+        if flags == .option, let digit = Int(chars), digit <= 5 {
             ui.setSizeOnSelected(digit == 0 ? nil : TaskSize.allCases[digit - 1])
             return true
         }
-
-        if flags == .command, chars == "z" { ui.undo(); return true }
-        if flags == [.command, .shift], chars == "z" { ui.redo(); return true }
-
-        if flags.isEmpty {
-            switch chars {
-            case "e": ui.editSelected(); return true
-            case "/": ui.focusRequest = .field(.filter); return true
-            default: break
-            }
+        if chars == "z", flags == .command || flags == [.command, .shift] {
+            flags.contains(.shift) ? ui.redo() : ui.undo()
+            return true
         }
-
-        return false
+        guard flags.isEmpty else { return false }
+        switch (key, chars) {
+        case (kVK_Return, _), (kVK_ANSI_KeypadEnter, _), (_, "e"): ui.editSelected()
+        case (kVK_Delete, _), (kVK_ForwardDelete, _): ui.deleteSelected()
+        case (_, "/"): ui.focusRequest = .field(.filter)
+        default: return false
+        }
+        return true
     }
 }

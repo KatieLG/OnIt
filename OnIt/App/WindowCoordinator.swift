@@ -1,100 +1,69 @@
 import AppKit
 import SwiftUI
 
-/// Opens the main board, Settings and Archive windows from an `LSUIElement` app.
-///
-/// While any of them is open the app temporarily becomes a regular app (Dock icon, app menu,
-/// ⌘-Tab, full screen) so windows reliably come to the front; it reverts to an accessory
-/// (menu bar only) app when they all close.
+/// The main board, Settings and Archive windows. While any is open OnIt is a regular app (Dock
+/// icon, ⌘-Tab, full screen); once they're all closed it goes back to living in the menu bar.
 @MainActor
 final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let store: AppStore
-    private let notifier: Notifier
+    /// The main window's own selection and filters; the data is shared with the panel.
     private let mainUI: BoardUIState
-    private var mainWindow: MainWindowController?
-    private var settingsWindow: NSWindow?
-    private var archiveWindow: NSWindow?
+    private var windows: [String: NSWindow] = [:]
+    private var keyRouter: KeyboardRouter?
 
-    init(store: AppStore, notifier: Notifier, mainUI: BoardUIState) {
+    init(store: AppStore, openSettings: @escaping () -> Void) {
         self.store = store
-        self.notifier = notifier
-        self.mainUI = mainUI
+        mainUI = BoardUIState(store: store)
+        mainUI.openSettings = openSettings
     }
 
-    func showMainWindow() {
-        if mainWindow == nil {
-            let controller = MainWindowController(store: store, ui: mainUI)
-            controller.onClose = { [weak self, weak controller] in
-                self?.revertActivationPolicyIfNeeded(closing: controller?.window)
+    /// The full board in a large, resizable, full-screen-capable window.
+    func showMain() {
+        let visible = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
+        let window = present("", content: RootView().environment(mainUI), fitsContent: false,
+                             defaultSize: NSSize(width: min(visible.width * 0.85, 1600), height: min(visible.height * 0.85, 1000)))
+        if keyRouter == nil {
+            window.collectionBehavior.insert(.fullScreenPrimary)
+            window.contentMinSize = PanelMetrics.minSize
+            keyRouter = KeyboardRouter(ui: mainUI, window: window, closesOnEscape: false) { window.performClose(nil) }
+        }
+        DispatchQueue.main.async { [mainUI] in mainUI.focusRequest = .board }
+    }
+
+    func showSettings() { present("Settings", content: SettingsView()) }
+    func showArchive() { present("Archive", content: ArchiveView()) }
+
+    @discardableResult
+    private func present(_ name: String, content: some View, fitsContent: Bool = true, defaultSize: NSSize? = nil) -> NSWindow {
+        let window = windows[name] ?? {
+            let controller = NSHostingController(rootView: content.environment(store))
+            if !fitsContent { controller.sizingOptions = [] }
+            let window = NSWindow(contentViewController: controller)
+            window.title = name.isEmpty ? "OnIt" : "OnIt \(name)"
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.tabbingMode = .disallowed
+            window.isReleasedWhenClosed = false
+            window.delegate = self
+            if !window.setFrameUsingName("OnIt\(name)") {
+                if let defaultSize { window.setContentSize(defaultSize) }
+                window.center()
             }
-            mainWindow = controller
-        }
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate()
-        mainWindow?.show()
-        mainWindow?.window.orderFrontRegardless()
-    }
-
-    func showSettings() {
-        if settingsWindow == nil {
-            let view = SettingsView()
-                .environment(store)
-                .environment(\.notifier, notifier)
-            settingsWindow = makeWindow(title: "OnIt Settings", autosave: "OnItSettings", content: view)
-        }
-        present(settingsWindow)
-    }
-
-    func showArchive() {
-        if archiveWindow == nil {
-            let view = ArchiveView().environment(store)
-            archiveWindow = makeWindow(title: "OnIt Archive", autosave: "OnItArchive", content: view)
-            archiveWindow?.styleMask.insert(.resizable)
-        }
-        present(archiveWindow)
-    }
-
-    private func makeWindow<Content: View>(title: String, autosave: String, content: Content) -> NSWindow {
-        let controller = NSHostingController(rootView: content)
-        let window = NSWindow(contentViewController: controller)
-        window.title = title
-        window.styleMask = [.titled, .closable, .miniaturizable]
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        window.center()
-        window.setFrameAutosaveName(autosave)
-        return window
-    }
-
-    private func present(_ window: NSWindow?) {
-        guard let window else { return }
+            window.setFrameAutosaveName("OnIt\(name)")
+            windows[name] = window
+            return window
+        }()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+        return window
     }
 
     func windowWillClose(_ notification: Notification) {
-        revertActivationPolicyIfNeeded(closing: notification.object as? NSWindow)
-    }
-
-    private func revertActivationPolicyIfNeeded(closing: NSWindow?) {
-        let open = [mainWindow?.window, settingsWindow, archiveWindow]
-            .compactMap { $0 }
-            .filter { $0 !== closing && ($0.isVisible || $0.isMiniaturized) }
-        if open.isEmpty {
+        let closing = notification.object as? NSWindow
+        if closing === windows[""] { mainUI.commitEdit() }
+        if !windows.values.contains(where: { $0 !== closing && ($0.isVisible || $0.isMiniaturized) }) {
             NSApp.setActivationPolicy(.accessory)
         }
-    }
-}
-
-private struct NotifierKey: EnvironmentKey {
-    static let defaultValue: Notifier? = nil
-}
-
-extension EnvironmentValues {
-    var notifier: Notifier? {
-        get { self[NotifierKey.self] }
-        set { self[NotifierKey.self] = newValue }
     }
 }

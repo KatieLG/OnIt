@@ -1,39 +1,20 @@
 import Foundation
 
-/// Board filters from the top bar. Empty sets mean "no restriction".
+/// Top bar filters. Empty sets mean no restriction; `nil` in `sizes` means unsized.
 struct TaskFilter: Equatable, Sendable {
-    var text: String = ""
-    /// `nil` inside the set means "unsized".
+    var text = ""
     var sizes: Set<TaskSize?> = []
     var tags: Set<String> = []
 
-    var isActive: Bool {
-        !text.trimmingCharacters(in: .whitespaces).isEmpty || !sizes.isEmpty || !tags.isEmpty
-    }
+    var isActive: Bool { !text.trimmingCharacters(in: .whitespaces).isEmpty || !sizes.isEmpty || !tags.isEmpty }
 
-    /// Text: every whitespace-separated term must appear in the title or a tag
-    /// (case- and diacritic-insensitive; a leading `#` matches tags only).
-    /// Sizes and tags: the task must match any one of the selected values.
+    /// Every text term must appear in the title or a tag (`#term`: tags only). Sizes and tags match any.
     func matches(_ task: TaskItem) -> Bool {
-        if !sizes.isEmpty, !sizes.contains(task.size) { return false }
-        if !tags.isEmpty, tags.isDisjoint(with: task.tags) { return false }
-
-        for term in text.split(whereSeparator: \.isWhitespace) {
-            if term.hasPrefix("#") {
-                let tagTerm = term.dropFirst()
-                if tagTerm.isEmpty { continue }
-                if !task.tags.contains(where: { Self.contains($0, String(tagTerm)) }) { return false }
-            } else {
-                let term = String(term)
-                if !Self.contains(task.title, term), !task.tags.contains(where: { Self.contains($0, term) }) {
-                    return false
-                }
-            }
+        guard sizes.isEmpty || sizes.contains(task.size), tags.isEmpty || !tags.isDisjoint(with: task.tags) else { return false }
+        return text.split(whereSeparator: \.isWhitespace).allSatisfy { term in
+            let tagOnly = term.hasPrefix("#"), needle = tagOnly ? term.dropFirst() : term
+            func has(_ text: String) -> Bool { text.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+            return needle.isEmpty || task.tags.contains(where: has) || (!tagOnly && has(task.title))
         }
-        return true
-    }
-
-    private static func contains(_ haystack: String, _ needle: String) -> Bool {
-        haystack.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
 }

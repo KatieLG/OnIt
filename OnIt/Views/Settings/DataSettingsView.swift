@@ -8,51 +8,29 @@ struct DataSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Data file") {
-                LabeledContent("Location") {
-                    Text(dataFileURL?.path(percentEncoded: false) ?? "In memory")
-                        .font(.caption)
-                        .textSelection(.enabled)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
-                }
-                HStack {
-                    Button("Show in Finder") {
-                        if let url = dataFileURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            if let url = store.persistence?.fileURL {
+                Section("Data file") {
+                    LabeledContent("Location") {
+                        Text(url.path(percentEncoded: false)).font(.caption).textSelection(.enabled).truncationMode(.middle)
                     }
-                    Button("Export JSON…", action: exportJSON)
-                    Button("Import JSON…", action: importJSON)
-                }
-                .disabled(dataFileURL == nil)
-            }
-
-            Section("Raycast") {
-                Text("Copy these two script commands into a Raycast script directory, then assign hotkeys to them in Raycast.")
-                    .font(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Open Raycast Script Folder") {
-                    if let url = Bundle.main.url(forResource: "raycast", withExtension: nil) {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    HStack {
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                        Button("Export JSON…", action: export)
+                        Button("Import JSON…", action: importJSON)
                     }
                 }
             }
-
-            if let message {
-                Text(message).font(.caption).foregroundStyle(.secondary)
-            }
+            if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
         }
         .formStyle(.grouped)
     }
 
-    private var dataFileURL: URL? { store.persistence?.fileURL }
-
-    private func exportJSON() {
+    private func export() {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "onit-export.json"
+        (panel.allowedContentTypes, panel.nameFieldStringValue) = ([.json], "onit-export.json")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try store.exportData().write(to: url, options: .atomic)
+            try store.snapshot().encoded().write(to: url)
             message = "Exported to \(url.lastPathComponent)."
         } catch {
             message = "Export failed: \(error.localizedDescription)"
@@ -62,31 +40,19 @@ struct DataSettingsView: View {
     private func importJSON() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        let snapshot: Snapshot
-        do {
-            snapshot = try Snapshot.decode(Data(contentsOf: url))
-        } catch {
-            message = "That file isn't a valid OnIt export: \(error.localizedDescription)"
-            return
-        }
+        guard let snapshot = try? Snapshot.decode(Data(contentsOf: url)) else { return message = "That file isn't an OnIt export." }
 
         let alert = NSAlert()
         alert.messageText = "Replace all boards and tasks?"
-        alert.informativeText = """
-        Importing “\(url.lastPathComponent)” (\(snapshot.boards.count) boards, \(snapshot.tasks.count) tasks) \
-        replaces everything currently in OnIt. A backup of your current data is saved first.
-        """
-        alert.alertStyle = .warning
+        alert.informativeText = "This imports \(snapshot.boards.count) boards and \(snapshot.tasks.count) tasks from “\(url.lastPathComponent)”, replacing everything in OnIt. Your current data is backed up first."
         alert.addButton(withTitle: "Import")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         store.flush(synchronously: true)
-        let backup = store.persistence?.writePreImportBackup()
+        let backup = store.persistence?.copyAside("pre-import")
         store.replaceAll(with: snapshot)
-        message = "Imported \(url.lastPathComponent)." + (backup.map { " Previous data saved as \($0.lastPathComponent)." } ?? "")
+        message = "Imported. Your previous data was saved as \(backup?.lastPathComponent ?? "a backup")."
     }
 }

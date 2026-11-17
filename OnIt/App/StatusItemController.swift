@@ -1,102 +1,59 @@
 import AppKit
 
-/// The menu bar icon: badge count, click handling and the add-feedback pulse.
+/// The menu bar icon: a badge count, left-click to toggle the panel, right-click (or ⌥/⌃-click) for the menu.
 @MainActor
 final class StatusItemController: NSObject {
-    private let store: AppStore
-    private let statusItem: NSStatusItem
-    private let onToggle: () -> Void
+    private let item: NSStatusItem
     private let menu: NSMenu
-    private var pulseGeneration = 0
-
-    var button: NSStatusBarButton? { statusItem.button }
+    private let onToggle: () -> Void
+    private var pulses = 0
+    var button: NSStatusBarButton? { item.button }
 
     init(store: AppStore, menu: NSMenu, onToggle: @escaping () -> Void) {
-        self.store = store
-        self.menu = menu
-        self.onToggle = onToggle
-        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        (self.menu, self.onToggle) = (menu, onToggle)
         super.init()
-
-        if let button = statusItem.button {
-            let image = NSImage(systemSymbolName: "checkmark.circle", accessibilityDescription: "OnIt")
-            image?.isTemplate = true
-            button.image = image
-            button.imagePosition = .imageLeading
-            button.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .medium)
-            button.target = self
-            button.action = #selector(buttonClicked(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            button.toolTip = "OnIt"
-        }
-        statusItem.autosaveName = "OnItStatusItem"
-
-        observeContinuously { [weak self] in self?.updateBadge() }
-    }
-
-    private func updateBadge() {
-        guard let button = statusItem.button else { return }
-        let count: Int? = switch store.settings.badgeMode {
-        case .doing: store.activeCount(in: .doing)
-        case .todo: store.activeCount(in: .todo)
-        case .off: nil
-        }
-        if let count, count > 0 {
-            button.title = "\(count)"
-            button.imagePosition = .imageLeading
-            let label = store.settings.badgeMode == .doing ? "in progress" : "to do"
-            button.setAccessibilityLabel("OnIt, \(count) \(label)")
-        } else {
-            button.title = ""
-            button.imagePosition = .imageOnly
-            button.setAccessibilityLabel("OnIt")
+        guard let button = item.button else { return }
+        button.image = NSImage(systemSymbolName: "checkmark.circle", accessibilityDescription: "OnIt")
+        button.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .medium)
+        button.target = self
+        button.action = #selector(clicked)
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        observeContinuously {
+            let mode = store.settings.badgeMode
+            let count = mode == .off ? 0 : store.activeCount(in: mode == .doing ? .doing : .todo)
+            button.title = count > 0 ? "\(count)" : ""
+            button.imagePosition = count > 0 ? .imageLeading : .imageOnly
+            button.setAccessibilityLabel(count > 0 ? "OnIt, \(count) \(mode == .doing ? "in progress" : "to do")" : "OnIt")
         }
     }
 
-    @objc private func buttonClicked(_ sender: NSStatusBarButton) {
+    @objc private func clicked() {
         let event = NSApp.currentEvent
-        let wantsMenu = event?.type == .rightMouseUp
-            || event?.modifierFlags.contains(.option) == true
-            || event?.modifierFlags.contains(.control) == true
-        if wantsMenu {
-            showMenu()
-        } else {
-            onToggle()
+        guard event?.type == .rightMouseUp || event?.modifierFlags.intersection([.option, .control]).isEmpty == false else {
+            return onToggle()
         }
+        item.menu = menu
+        item.button?.performClick(nil)
+        item.menu = nil
     }
 
-    private func showMenu() {
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil
-    }
-
-    /// ~600 ms tint pulse after a task is added via URL. With Reduce Motion, tint only.
+    /// A brief tint (and fade, unless Reduce Motion is on) after a silent add.
     func pulse() {
-        guard let button = statusItem.button else { return }
-        pulseGeneration += 1
-        let generation = pulseGeneration
+        guard let button = item.button else { return }
+        pulses += 1
+        let pulse = pulses
         button.contentTintColor = .controlAccentColor
-
         if !BoardUIState.reduceMotion {
+            button.alphaValue = 0.35
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.15
-                button.animator().alphaValue = 0.35
-            } completionHandler: {
-                MainActor.assumeIsolated {
-                    NSAnimationContext.runAnimationGroup { context in
-                        context.duration = 0.25
-                        button.animator().alphaValue = 1
-                    }
-                }
+                context.duration = 0.4
+                button.animator().alphaValue = 1
             }
         }
-
-        Task { @MainActor [weak self] in
+        Task {
             try? await Task.sleep(for: .milliseconds(600))
-            guard let self, self.pulseGeneration == generation else { return }
-            button.contentTintColor = nil
-            button.alphaValue = 1
+            if pulses == pulse { button.contentTintColor = nil }
         }
     }
 }

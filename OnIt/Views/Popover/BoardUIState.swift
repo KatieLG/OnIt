@@ -1,26 +1,19 @@
 import AppKit
 import SwiftUI
 
-/// Which text field in the popover has focus.
-enum FocusField: Hashable {
-    case filter
-    case add
-    case edit
-}
+enum FocusField: Hashable { case filter, add, edit }
 
 enum FocusRequest: Equatable {
     case field(FocusField)
-    /// Resign any text field so the board receives keyboard navigation.
+    /// Leave any text field so the board gets keyboard navigation.
     case board
 }
 
-/// Transient UI state for the popover (selection, filters, editing). Not persisted, except the
-/// selected board and Later state, which live in `AppSettings` via the store.
-@MainActor
-@Observable
+/// One board surface's transient state: selection, filters, editing. The panel and the main window
+/// each have their own; the selected board and Later state are shared settings in the store.
+@MainActor @Observable
 final class BoardUIState {
     let store: AppStore
-
     var filter = TaskFilter()
     var selectedTaskId: UUID?
     var editingTaskId: UUID?
@@ -29,130 +22,89 @@ final class BoardUIState {
     var addFeedback: String?
     var tagEditingTaskId: UUID?
     var tagEditText = ""
-
-    /// Mirror of the view's `@FocusState`, kept in sync by `RootView`.
+    /// Mirrors the view's `@FocusState`, kept in sync by `RootView`.
     var focus: FocusField?
-    /// Set to ask `RootView` to move focus; it clears this once handled.
+    /// Asks `RootView` to move focus; cleared once handled.
     var focusRequest: FocusRequest?
-
     @ObservationIgnored var openSettings: () -> Void = {}
     @ObservationIgnored private var feedbackTask: Task<Void, Never>?
 
-    init(store: AppStore) {
-        self.store = store
-    }
+    init(store: AppStore) { self.store = store }
 
     static var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    static var cardAnimation: Animation? { reduceMotion ? nil : .spring(duration: 0.28, bounce: 0.15) }
+    func animate(_ change: () -> Void) { withAnimation(Self.cardAnimation, change) }
 
-    /// The standard card animation, or none when Reduce Motion is on.
-    static var cardAnimation: Animation? {
-        reduceMotion ? nil : .spring(duration: 0.28, bounce: 0.15)
-    }
+    // MARK: Boards and cards
 
-    // MARK: Board selection
-
-    /// nil = All boards.
-    var selectedBoardId: UUID? {
-        store.board(id: store.settings.lastSelectedBoardId)?.id
-    }
-
-    var isAllView: Bool { selectedBoardId == nil }
-
-    func selectBoard(_ id: UUID?) {
-        store.selectBoard(id)
-        if let selected = selectedTaskId, !visibleTasks(in: store.task(id: selected)?.column ?? .todo).contains(where: { $0.id == selected }) {
-            selectedTaskId = nil
-        }
-    }
-
-    /// ⌘1 = All, ⌘2… = boards in order.
-    func selectBoard(atShortcutIndex index: Int) {
-        if index == 1 {
-            selectBoard(nil)
-        } else if index - 2 < store.boards.count {
-            selectBoard(store.boards[index - 2].id)
-        }
-    }
-
-    // MARK: Visible data
-
-    var visibleColumns: [Column] {
-        store.settings.laterExpanded ? Column.allCases : Column.allCases.filter { $0 != .later }
-    }
+    /// nil means All.
+    var selectedBoardId: UUID? { store.board(id: store.settings.lastSelectedBoardId)?.id }
+    var visibleColumns: [Column] { Column.allCases.filter { $0 != .later || store.settings.laterExpanded } }
+    var selectedTask: TaskItem? { store.task(id: selectedTaskId).flatMap { $0.isArchived ? nil : $0 } }
 
     func visibleTasks(in column: Column) -> [TaskItem] {
         store.tasks(in: column, boardId: selectedBoardId, filter: filter)
     }
 
-    var selectedTask: TaskItem? {
-        guard let task = store.task(id: selectedTaskId), !task.isArchived else { return nil }
-        return task
+    func selectBoard(_ id: UUID?) {
+        store.selectBoard(id)
+        if let task = selectedTask, position(of: task) == nil { selectedTaskId = nil }
     }
 
-    // MARK: Filters
-
-    func clearFilters() {
-        filter = TaskFilter()
+    /// ⌘1 is All, ⌘2… the boards in order.
+    func selectBoard(atShortcutIndex index: Int) {
+        if index == 1 { selectBoard(nil) } else if store.boards.indices.contains(index - 2) { selectBoard(store.boards[index - 2].id) }
     }
 
-    func toggleSizeFilter(_ size: TaskSize?) {
-        if filter.sizes.contains(size) { filter.sizes.remove(size) } else { filter.sizes.insert(size) }
+    private func position(of task: TaskItem) -> (list: [TaskItem], index: Int)? {
+        let list = visibleTasks(in: task.column)
+        return list.firstIndex { $0.id == task.id }.map { (list, $0) }
     }
 
-    func toggleTagFilter(_ tag: String) {
-        if filter.tags.contains(tag) { filter.tags.remove(tag) } else { filter.tags.insert(tag) }
+    /// Handles a card dropped on a column (or the Later strip). Strings that aren't card IDs are ignored.
+    func drop(_ items: [String], in column: Column, at position: InsertPosition = .end) -> Bool {
+        guard let id = items.lazy.compactMap(UUID.init(uuidString:)).first, store.task(id: id) != nil else { return false }
+        animate { store.move(id, to: column, position: position) }
+        selectedTaskId = id
+        return true
     }
 
-    // MARK: Adding
+    // MARK: Adding and editing
 
     func submitAdd() {
-        let text = addText
-        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let result = withAnimation(Self.cardAnimation) {
-            store.add(text: text, preferredBoardId: selectedBoardId)
-        }
-        switch result {
-        case .added(let task, _):
+        guard !addText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        do {
+            let added = try withAnimation(Self.cardAnimation) { try store.add(text: addText, preferredBoardId: selectedBoardId) }
             addText = ""
-            selectedTaskId = task.id
-            showAddFeedback(nil)
-        case .addedWithWarning(let task, _, let message):
-            addText = ""
-            selectedTaskId = task.id
-            showAddFeedback(message)
-        case .rejected(let reason):
-            showAddFeedback(reason.message)
+            selectedTaskId = added.task.id
+            showFeedback(added.warning)
+        } catch {
+            showFeedback(error.localizedDescription)
         }
     }
 
-    private func showAddFeedback(_ message: String?) {
-        feedbackTask?.cancel()
+    private func showFeedback(_ message: String?) {
         addFeedback = message
-        guard message != nil else { return }
-        feedbackTask = Task { [weak self] in
+        feedbackTask?.cancel()
+        feedbackTask = Task {
             try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled else { return }
-            self?.addFeedback = nil
+            if !Task.isCancelled { addFeedback = nil }
         }
     }
-
-    // MARK: Editing
 
     func beginEdit(_ id: UUID) {
         guard let task = store.task(id: id) else { return }
-        selectedTaskId = id
-        editText = ShorthandParser.escapeForEditing(task.title, knownBoards: store.aliasEntries)
-        editingTaskId = id
+        (selectedTaskId, editingTaskId) = (id, id)
+        editText = ShorthandParser.escapeForEditing(task.title, boards: store.boards)
         focusRequest = .field(.edit)
     }
 
+    /// Saves the inline edit if the text changed.
     func commitEdit() {
         guard let id = editingTaskId else { return }
         editingTaskId = nil
-        let text = editText
-        if let task = store.task(id: id),
-           text != ShorthandParser.escapeForEditing(task.title, knownBoards: store.aliasEntries) {
-            store.editTitle(id, shorthand: text)
+        if let task = store.task(id: id), editText != ShorthandParser.escapeForEditing(task.title, boards: store.boards) {
+            store.edit(id, shorthand: editText)
         }
         focusRequest = .board
     }
@@ -163,14 +115,13 @@ final class BoardUIState {
     }
 
     func beginTagEdit(_ id: UUID) {
-        guard let task = store.task(id: id) else { return }
-        tagEditText = task.tags.map { "#\($0)" }.joined(separator: " ")
+        tagEditText = store.task(id: id)?.tags.map { "#\($0)" }.joined(separator: " ") ?? ""
         tagEditingTaskId = id
     }
 
     func commitTagEdit() {
-        guard let id = tagEditingTaskId else { return }
-        store.setTags(id, ShorthandParser.normaliseTags(tagEditText))
+        let tags = ShorthandParser.normaliseTags(tagEditText)
+        if let id = tagEditingTaskId { store.update(id) { $0.tags = tags } }
         tagEditingTaskId = nil
     }
 
@@ -178,124 +129,74 @@ final class BoardUIState {
 
     func toggleLater() {
         store.updateSettings { $0.laterExpanded.toggle() }
-        if !store.settings.laterExpanded, selectedTask?.column == .later {
-            selectedTaskId = nil
-        }
+        if !store.settings.laterExpanded, selectedTask?.column == .later { selectedTaskId = nil }
     }
 
-    /// ↑ / ↓
+    /// ↑ / ↓ within the column.
     func moveSelection(by delta: Int) {
-        guard let task = selectedTask else {
-            selectFirstAvailable()
-            return
-        }
-        let list = visibleTasks(in: task.column)
-        guard let index = list.firstIndex(where: { $0.id == task.id }) else {
-            selectFirstAvailable()
-            return
-        }
-        let target = min(max(index + delta, 0), list.count - 1)
-        selectedTaskId = list[target].id
+        guard let task = selectedTask, let pos = position(of: task) else { return selectFirst() }
+        selectedTaskId = pos.list[(pos.index + delta).clamped(to: 0...pos.list.count - 1)].id
     }
 
-    /// ← / →: jumps to the nearest non-empty column in that direction, keeping the row if possible.
+    /// ← / →: the nearest non-empty column that way, keeping the row where possible.
     func moveSelectionToAdjacentColumn(_ delta: Int) {
-        guard let task = selectedTask else {
-            selectFirstAvailable()
-            return
+        guard let task = selectedTask, let pos = position(of: task), var c = visibleColumns.firstIndex(of: task.column) else {
+            return selectFirst()
         }
-        let columns = visibleColumns
-        guard var columnIndex = columns.firstIndex(of: task.column) else { return }
-        let row = visibleTasks(in: task.column).firstIndex(where: { $0.id == task.id }) ?? 0
-        while true {
-            columnIndex += delta
-            guard columns.indices.contains(columnIndex) else { return }
-            let list = visibleTasks(in: columns[columnIndex])
-            if !list.isEmpty {
-                selectedTaskId = list[min(row, list.count - 1)].id
-                return
-            }
+        while visibleColumns.indices.contains(c + delta) {
+            c += delta
+            let list = visibleTasks(in: visibleColumns[c])
+            if !list.isEmpty { return selectedTaskId = list[min(pos.index, list.count - 1)].id }
         }
     }
 
-    private func selectFirstAvailable() {
-        for column in visibleColumns {
-            if let first = visibleTasks(in: column).first {
-                selectedTaskId = first.id
-                return
-            }
-        }
+    private func selectFirst() {
+        selectedTaskId = visibleColumns.lazy.compactMap { self.visibleTasks(in: $0).first }.first?.id
     }
 
     /// ⌘← / ⌘→
     func moveSelectedToAdjacentColumn(_ delta: Int) {
-        guard let task = selectedTask else { return }
-        let target = delta < 0 ? task.column.previous : task.column.next
-        guard let target else { return }
-        withAnimation(Self.cardAnimation) {
-            store.move(task.id, to: target, position: .end)
-        }
+        guard let task = selectedTask, let target = delta < 0 ? task.column.previous : task.column.next else { return }
+        animate { store.move(task.id, to: target) }
     }
 
-    /// ⌘↑ / ⌘↓, relative to the visible (filtered) neighbours.
+    /// ⌘↑ / ⌘↓, past the neighbouring visible card.
     func reorderSelected(_ delta: Int) {
-        guard let task = selectedTask else { return }
-        let list = visibleTasks(in: task.column)
-        guard let index = list.firstIndex(where: { $0.id == task.id }) else { return }
-        let targetIndex = index + delta
-        guard list.indices.contains(targetIndex) else { return }
-        let neighbour = list[targetIndex].id
-        withAnimation(Self.cardAnimation) {
-            store.move(task.id, to: task.column, position: delta < 0 ? .before(neighbour) : .after(neighbour))
-        }
+        guard let task = selectedTask, let pos = position(of: task), pos.list.indices.contains(pos.index + delta) else { return }
+        let neighbour = pos.list[pos.index + delta].id
+        animate { store.move(task.id, to: task.column, position: delta < 0 ? .before(neighbour) : .after(neighbour)) }
     }
 
     func setSizeOnSelected(_ size: TaskSize?) {
-        guard let task = selectedTask else { return }
-        store.setSize(task.id, size)
+        if let id = selectedTask?.id { store.update(id) { $0.size = size } }
     }
 
     func editSelected() {
-        guard let task = selectedTask else { return }
-        beginEdit(task.id)
+        if let id = selectedTask?.id { beginEdit(id) }
     }
 
     func deleteSelected() {
-        guard let task = selectedTask else { return }
-        let column = task.column
-        let list = visibleTasks(in: column)
-        let index = list.firstIndex(where: { $0.id == task.id }) ?? 0
-        withAnimation(Self.cardAnimation) {
-            store.delete(task.id)
-        }
-        let remaining = visibleTasks(in: column)
-        selectedTaskId = remaining.isEmpty ? nil : remaining[min(index, remaining.count - 1)].id
+        guard let task = selectedTask, let pos = position(of: task) else { return }
+        animate { store.delete(task.id) }
+        let rest = visibleTasks(in: task.column)
+        selectedTaskId = rest.isEmpty ? nil : rest[min(pos.index, rest.count - 1)].id
     }
 
-    func undo() {
-        withAnimation(Self.cardAnimation) { store.undo() }
-    }
+    func undo() { animate(store.undo) }
+    func redo() { animate(store.redo) }
 
-    func redo() {
-        withAnimation(Self.cardAnimation) { store.redo() }
-    }
-
-    /// Esc priority: clear filter → cancel edit → leave a text field → close the popover.
-    /// Returns false when the popover should close.
+    /// Esc clears filters, else cancels an edit, else leaves the text field. False if there was nothing to do.
     func handleEscape() -> Bool {
         if filter.isActive {
-            clearFilters()
-            return true
-        }
-        if editingTaskId != nil {
+            filter = TaskFilter()
+        } else if editingTaskId != nil {
             cancelEdit()
-            return true
-        }
-        if focus != nil {
+        } else if let focus {
             if focus == .add { addText = "" }
             focusRequest = .board
-            return true
+        } else {
+            return false
         }
-        return false
+        return true
     }
 }
