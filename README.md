@@ -157,7 +157,8 @@ The spec asked for these to be flagged rather than silently decided:
 9. **Filters:** text terms must all match (title or tags; `#term` matches tags only). Selected tags and
    sizes match *any* (OR). The size filter includes "unsized".
 10. **Starting boards are Home (`@home`, `@h`) and Work (`@work`, `@w`)**, not the spec's Internal and Client.
-    Work is the default board. The welcome card reads "Press your Raycast hotkey and try: Pick up dry cleaning @home !s #errands".
+    Work is the default board. Each starts with one plain example task ("Pick up dry cleaning" on Home,
+    "Reply to the project update email" on Work) instead of the spec's Raycast welcome card.
 11. **Acceptance criterion 1 uses `@acme`**, which isn't a starting board. Add an Acme board
     (or an `acme` alias) first, or try `@home`.
 12. **Tests run hosted in the app.** `AppDelegate` detects the XCTest environment and uses an in-memory
