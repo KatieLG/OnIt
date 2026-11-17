@@ -1,8 +1,13 @@
-# Stackban
+# OnIt
 
 A native macOS menu bar kanban board for the stream of small asks that land on you every day.
 Capture a task from anywhere with one Raycast shortcut and a line of shorthand; drag it through
 Todo → In Progress → Done (or park it in Later). See [`STACKBAN_SPEC.md`](STACKBAN_SPEC.md) for the full brief.
+
+> **Renamed from Stackban.** The spec uses the working name *Stackban*. The app is now **OnIt**
+> (`onit://`, `com.example.onit`). On first launch, OnIt copies any data from
+> `~/Library/Application Support/Stackban/` into its own folder, renaming `stackban.*.json` to
+> `onit.*.json`. The old folder is left untouched, so delete it by hand once you're happy.
 
 ## Build and run
 
@@ -10,24 +15,24 @@ Requires macOS 14+, Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeG
 
 ```sh
 xcodegen generate
-xcodebuild -scheme Stackban -destination 'platform=macOS' build
-xcodebuild -scheme Stackban -destination 'platform=macOS' test
+xcodebuild -scheme OnIt -destination 'platform=macOS' build
+xcodebuild -scheme OnIt -destination 'platform=macOS' test
 ```
 
-Or open `Stackban.xcodeproj` after `xcodegen generate` and press ⌘R. The `.xcodeproj` is generated
+Or open `OnIt.xcodeproj` after `xcodegen generate` and press ⌘R. The `.xcodeproj` is generated
 and git-ignored; edit `project.yml` instead.
 
 The app is ad-hoc signed ("Sign to Run Locally") and unsandboxed. There are two ways to see the board:
 
 - **Menu bar panel.** Click the stacked-squares icon in the menu bar for a drop-down panel. Right-click
-  (or ⌥-click) shows *Open Stackban · Open in Window · Archive… · Settings… · Quit*.
-- **Full window.** Opening Stackban as an app (Finder, Spotlight, Launchpad, or opening it again while
+  (or ⌥-click) shows *Open OnIt · Open in Window · Archive… · Settings… · Quit*.
+- **Full window.** Opening OnIt as an app (Finder, Spotlight, Launchpad, or opening it again while
   it's running) shows a large, centred, resizable window that supports full screen (⌃⌘F or the
-  green button). While it's open, Stackban has a Dock icon and app menu. Closing it returns Stackban
-  to menu bar only. Its size and position are remembered. Launches from a `stackban://` link (Raycast)
+  green button). While it's open, OnIt has a Dock icon and app menu. Closing it returns OnIt
+  to menu bar only. Its size and position are remembered. Launches from a `onit://` link (Raycast)
   or at login stay silent and don't open it.
 
-The bundle ID is the placeholder `com.example.stackban` (in `project.yml`).
+The bundle ID is the placeholder `com.example.onit` (in `project.yml`).
 
 ## Shorthand
 
@@ -50,27 +55,27 @@ The same shorthand works in the in-app "+ Add task…" field and when editing a 
 
 | URL | Action |
 |---|---|
-| `stackban://add?text=<percent-encoded line>` | Parse and add the task, without opening the board. |
-| `stackban://open` | Show the board. |
-| `stackban://open?board=<alias>` | Show the board with that board selected. |
-| `stackban://toggle` | Show or hide the board. |
+| `onit://add?text=<percent-encoded line>` | Parse and add the task, without opening the board. |
+| `onit://open` | Show the board. |
+| `onit://open?board=<alias>` | Show the board with that board selected. |
+| `onit://toggle` | Show or hide the board. |
 
 `+` in the query is a literal plus, not a space. Invalid links post a notification instead of
 failing silently.
 
 ```sh
-open -g "stackban://add?text=Draft%20proposal%20%40c%20%21L%20%23sales"
+open -g "onit://add?text=Draft%20proposal%20%40c%20%21L%20%23sales"
 ```
 
 ## Raycast setup
 
-1. In Stackban: **Settings → Data → Open Raycast Script Folder** (or use `raycast/` in this repo).
-2. Copy `add-stackban-task.sh` and `open-stackban.sh` into a folder Raycast watches for script
+1. In OnIt: **Settings → Data → Open Raycast Script Folder** (or use `raycast/` in this repo).
+2. Copy `add-onit-task.sh` and `open-onit.sh` into a folder Raycast watches for script
    commands (Raycast → Extensions → Script Commands → Add Directories). Make sure they're
    executable: `chmod +x *.sh`.
-3. Assign hotkeys in Raycast: e.g. ⌥⌘Space for *Add Stackban Task* and ⌥⌘K for *Toggle Stackban*.
+3. Assign hotkeys in Raycast: e.g. ⌥⌘Space for *Add OnIt Task* and ⌥⌘K for *Toggle OnIt*.
 
-Both scripts use `open -g`, so capture never steals focus. If Stackban isn't running, the add
+Both scripts use `open -g`, so capture never steals focus. If OnIt isn't running, the add
 command launches it silently and the task is still added.
 
 ## Data
@@ -78,15 +83,15 @@ command launches it silently and the task is still added.
 Everything lives in one human-readable file:
 
 ```
-~/Library/Application Support/Stackban/stackban.json
+~/Library/Application Support/OnIt/onit.json
 ```
 
 - Writes are atomic (temp file + rename), debounced ~300 ms, and flushed on quit.
-- `stackban.backup-1…3.json` are rotated once per launch.
-- A file that fails to decode is never overwritten: it's moved to `stackban.corrupt-<timestamp>.json`
+- `onit.backup-1…3.json` are rotated once per launch.
+- A file that fails to decode is never overwritten: it's moved to `onit.corrupt-<timestamp>.json`
   and the newest valid backup is loaded, with a one-time alert.
 - Hand edits (or a sync tool) are picked up live; the app ignores its own writes.
-- **Import** saves `stackban.pre-import-<timestamp>.json` before replacing anything.
+- **Import** saves `onit.pre-import-<timestamp>.json` before replacing anything.
 
 ## Keyboard (board focused)
 
@@ -112,14 +117,14 @@ Everything lives in one human-readable file:
 ```
 project.yml            XcodeGen spec
 raycast/               Raycast script commands (also bundled into the app's Resources)
-Stackban/App/          App entry, AppDelegate (URL handling), status item, panel, keyboard, windows
-Stackban/Model/        Board, TaskItem, TaskSize, Column, AppSettings, Snapshot
-Stackban/Parsing/      ShorthandParser (pure)
-Stackban/Store/        AppStore, Persistence, Undo, ArchiveSweeper, Migrations, TaskFilter
-Stackban/Capture/      URLRouter (pure)
-Stackban/Views/        Popover, Archive and Settings SwiftUI views
-Stackban/Support/      SizeStyle, colours, formatting, notifications
-StackbanTests/         Swift Testing suites
+OnIt/App/          App entry, AppDelegate (URL handling), status item, panel, keyboard, windows
+OnIt/Model/        Board, TaskItem, TaskSize, Column, AppSettings, Snapshot
+OnIt/Parsing/      ShorthandParser (pure)
+OnIt/Store/        AppStore, Persistence, Undo, ArchiveSweeper, Migrations, TaskFilter
+OnIt/Capture/      URLRouter (pure)
+OnIt/Views/        Popover, Archive and Settings SwiftUI views
+OnIt/Support/      SizeStyle, colours, formatting, notifications
+OnItTests/         Swift Testing suites
 ```
 
 ## Notes, deviations and ambiguities

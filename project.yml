@@ -1,4 +1,4 @@
-name: Stackban
+name: OnIt
 options:
   bundleIdPrefix: com.example
   deploymentTarget:
@@ -15,19 +15,19 @@ settings:
     DEAD_CODE_STRIPPING: YES
 
 targets:
-  Stackban:
+  OnIt:
     type: application
     platform: macOS
     sources:
-      - path: Stackban
+      - path: OnIt
       - path: raycast
         type: folder
         buildPhase: resources
     info:
-      path: Stackban/Resources/Info.plist
+      path: OnIt/Resources/Info.plist
       properties:
-        CFBundleDisplayName: Stackban
-        CFBundleName: Stackban
+        CFBundleDisplayName: OnIt
+        CFBundleName: OnIt
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         LSUIElement: true
@@ -35,13 +35,13 @@ targets:
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
         CFBundleURLTypes:
-          - CFBundleURLName: com.example.stackban
+          - CFBundleURLName: com.example.onit
             CFBundleURLSchemes:
-              - stackban
+              - onit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.stackban
-        PRODUCT_NAME: Stackban
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.onit
+        PRODUCT_NAME: OnIt
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_APP_SANDBOX: NO
         ENABLE_HARDENED_RUNTIME: NO
@@ -51,31 +51,31 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         COMBINE_HIDPI_IMAGES: YES
 
-  StackbanTests:
+  OnItTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: StackbanTests
+      - path: OnItTests
     dependencies:
-      - target: Stackban
+      - target: OnIt
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.stackban.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.onit.tests
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
         BUNDLE_LOADER: "$(TEST_HOST)"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stackban.app/Contents/MacOS/Stackban"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/OnIt.app/Contents/MacOS/OnIt"
 
 schemes:
-  Stackban:
+  OnIt:
     build:
       targets:
-        Stackban: all
-        StackbanTests: [test]
+        OnIt: all
+        OnItTests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - StackbanTests
+        - OnItTests
