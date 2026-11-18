@@ -38,11 +38,21 @@ struct TopBar: View {
             .frame(width: 190)
             .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
 
-            if store.showsSizes(boardId: ui.selectedBoardId) {
-                FilterMenu(title: "Size", options: TaskSize.allCases.map(Optional.some) + [nil], selection: $ui.filter.sizes) {
-                    $0?.label ?? "Unsized"
-                }
+            let sized = store.showsSizes(boardId: ui.selectedBoardId)
+            Button {
+                store.setShowsSizes(!sized, boardId: ui.selectedBoardId)
+                if sized { ui.filter.sizes = [] } // don't leave a size filter on that can't be seen
+            } label: {
+                Image(systemName: sized ? "tshirt.fill" : "tshirt").foregroundStyle(sized ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
+            .buttonStyle(.borderless)
+            .help("\(sized ? "Hide" : "Show") sizes \(ui.selectedBoardId == nil ? "on every board" : "on this board")")
+            .accessibilityLabel("Show sizes")
+            .accessibilityValue(sized ? "On" : "Off")
+            FilterMenu(title: "Size", options: TaskSize.allCases.map(Optional.some) + [nil], selection: $ui.filter.sizes) {
+                $0?.label ?? "Unsized"
+            }
+            .disabled(!sized)
             FilterMenu(title: "#Tag", options: store.allTags, selection: $ui.filter.tags) { "#\($0)" }
             Button { ui.openSettings() } label: { Image(systemName: "gearshape") }
                 .buttonStyle(.borderless)

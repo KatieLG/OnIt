@@ -236,6 +236,11 @@ final class AppStore {
         updateBoard(id) { $0.aliases = aliases }
     }
 
+    /// Shows or hides sizes on one board, or on every board for nil (All).
+    func setShowsSizes(_ on: Bool, boardId: UUID?) {
+        perform(undoable: false) { for i in boards.indices where boardId == nil || boards[i].id == boardId { boards[i].showsSizes = on } }
+    }
+
     func setDefaultBoard(_ id: UUID) {
         perform(undoable: false) { for i in boards.indices { boards[i].isDefault = boards[i].id == id } }
     }
