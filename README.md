@@ -19,7 +19,7 @@ this week.
 
 Type a task the way you'd jot it down, and add a little shorthand to file it as you go:
 
-<p align="center"><img src="docs/screenshots/onit-shorthand.gif" width="800" alt="Typing “Send invoice @work !s #billing” into OnIt, which adds the task to the Work board, sized S and tagged billing"></p>
+<p align="center"><img src="docs/screenshots/onit-shorthand.webp" width="765" alt="Typing “Send invoice @work !s #billing” into OnIt, which adds the task to the Work board, sized S and tagged billing"></p>
 
 ```
 Send invoice @work !s #billing
@@ -33,8 +33,8 @@ works the same in the board's add field and from Raycast.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/onit-panel.png" alt="OnIt's translucent board dropping down from the menu bar"></td>
-    <td width="50%"><img src="docs/screenshots/onit-window.png" alt="OnIt's full app window with Todo, In Progress, Done and Later columns"></td>
+    <td width="50%"><img src="docs/screenshots/onit-panel.jpg" alt="OnIt's translucent board dropping down from the menu bar"></td>
+    <td width="50%"><img src="docs/screenshots/onit-window.jpg" alt="OnIt's full app window with Todo, In Progress, Done and Later columns"></td>
   </tr>
   <tr>
     <td align="center">Click the ✓ in the menu bar for a translucent board over whatever you're doing.</td>
@@ -46,8 +46,8 @@ works the same in the board's add field and from Raycast.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/onit-home.png" alt="OnIt showing a single board on its own"></td>
-    <td width="50%"><img src="docs/screenshots/onit-work.png" alt="OnIt showing a different board on its own"></td>
+    <td width="50%"><img src="docs/screenshots/onit-home.jpg" alt="OnIt showing a single board on its own"></td>
+    <td width="50%"><img src="docs/screenshots/onit-work.jpg" alt="OnIt showing a different board on its own"></td>
   </tr>
   <tr>
     <td align="center" colspan="2">Give each area its own board (a client, a project, a side hustle, home), each with its own colour. Switch with one click or ⌘1–⌘9, or view them all together.</td>
