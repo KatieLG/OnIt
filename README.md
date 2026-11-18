@@ -5,15 +5,15 @@
 <h1 align="center">OnIt</h1>
 
 <p align="center"><strong>Stay “on it”.</strong><br>
-A native macOS board for all the small things you've said you'll do.</p>
+A macOS board for all the small things you've said you'll do.</p>
 
 ---
 
-“Can you send that over?” *On it.* “Could you take a look?” *On it.*
+“Can you update the deck?” *On it.* “Could you review this?” *On it.*
 
-Small asks land all day, from every direction, and they live in your head until one slips. OnIt gives them
-somewhere to go. Type one line and it's on your board, sized and sorted. At a glance you can see what's
-waiting, what you're doing, what you finished this week, and whether you've taken on too much.
+When small tasks are landing from every direction, OnIt gives them somewhere to go. Type one line and it's
+on your board, sized and sorted. At a glance you can see what's waiting, what you're doing and what you finished
+this week.
 
 ## In your menu bar, or full screen
 
@@ -43,12 +43,28 @@ waiting, what you're doing, what you finished this week, and whether you've take
 Look at one board at a time, or all of them together in **All**. Switch with one click or ⌘1–⌘9.
 OnIt starts you off with *Home* and *Work*; rename them, recolour them, or add as many as you like.
 
-## What makes it different
+## Shorthand capture
 
-- **Sizes you can see.** Every task is XS (minutes) to XL (days), shown as a colour stripe and a label.
-  Columns add up their load, and In Progress turns orange when you're carrying too much.
-- **Shorthand capture.** `Send invoice @work !s #billing` puts it on Work, sized S, tagged *billing*.
-  Use `@` for the board, `!` for the size and `#` for tags, or none of them.
+Type a task the way you'd jot it down, and add a little shorthand to file it as you go:
+
+```
+Send invoice @work !s #billing
+```
+
+That lands on **Work**, sized **S**, tagged **billing**. Use `@` for the board, `!` for the size (`xs` to `xl`)
+and `#` for tags, in any order, or skip them all. Boards also answer to short aliases like `@w`, and it
+works the same in the board's add field and from Raycast.
+
+## Sizes (optional)
+
+Sizes are on by default. Give a task a size from XS to XL and it shows as a colour stripe and a label you
+can click to change. Each column adds up its total.
+
+Don't need them? Turn off **Show Sizes** for a board in the **Size** menu (or in **Settings → Boards**).
+Any sizes you've set are kept, in case you turn them back on.
+
+## Fast, tidy, private
+
 - **Keyboard first, drag friendly.** Arrow keys to move around, ⌘-arrows to move cards, ⌥1–5 to size them,
   ⌘Z to undo. Or just drag.
 - **Tidies itself.** Done tasks move to the Archive after a week, so the board stays about now.
@@ -57,10 +73,14 @@ OnIt starts you off with *Home* and *Work*; rename them, recolour them, or add a
 
 ## Install
 
-You need macOS 14 or later, Xcode 16 or later, and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+OnIt is built from source. You need macOS 14 or later, Xcode 16 or later, and
+[XcodeGen](https://github.com/yonaskolb/XcodeGen). In Terminal, clone this repo, then build and install
+the app:
 
 ```sh
 brew install xcodegen
+git clone https://github.com/KatieLG/OnIt.git
+cd OnIt
 xcodegen generate
 xcodebuild -scheme OnIt -configuration Release -destination 'platform=macOS' -derivedDataPath build build
 cp -R build/Build/Products/Release/OnIt.app /Applications/
@@ -68,11 +88,12 @@ cp -R build/Build/Products/Release/OnIt.app /Applications/
 
 Open OnIt from Applications. Turn on **Launch at login** in **Settings → General** to keep it in your menu bar.
 
-## Works great with Raycast (optional)
+## Integration with Raycast (optional)
 
 If you use [Raycast](https://www.raycast.com), the two script commands in [`raycast/`](raycast) add global
 shortcuts. **Add OnIt Task** captures a task from anywhere without leaving what you're doing, and
-**Toggle OnIt** shows or hides the board. From this repo's root:
+**Toggle OnIt** shows or hides the board. Link them into Raycast's scripts folder from the `OnIt` folder
+you cloned:
 
 ```sh
 mkdir -p ~/.config/raycast/scripts
@@ -81,7 +102,7 @@ ln -sf "$(pwd)/raycast/add-onit-task.sh" "$(pwd)/raycast/open-onit.sh" ~/.config
 
 Then in **Raycast Settings → Extensions**, click **+ → Add Script Directory**, choose
 `~/.config/raycast/scripts` (press ⌘⇧G to type the path), and give both commands a hotkey.
-The links mean the scripts stay up to date when you pull changes.
+Because they're links, keep the cloned folder where it is; the scripts stay up to date when you pull changes.
 
 ---
 
