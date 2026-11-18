@@ -15,6 +15,20 @@ When small tasks are landing from every direction, OnIt gives them somewhere to 
 on your board, sized and sorted. At a glance you can see what's waiting, what you're doing and what you finished
 this week.
 
+## Shorthand capture
+
+Type a task the way you'd jot it down, and add a little shorthand to file it as you go:
+
+<p align="center"><img src="docs/screenshots/onit-shorthand.gif" width="800" alt="Typing “Send invoice @work !s #billing” into OnIt, which adds the task to the Work board, sized S and tagged billing"></p>
+
+```
+Send invoice @work !s #billing
+```
+
+That lands on **Work**, sized **S**, tagged **billing**. Use `@` for the board, `!` for the size (`xs` to `xl`)
+and `#` for tags, in any order, or skip them all. Boards also answer to short aliases like `@w`, and it
+works the same in the board's add field and from Raycast.
+
 ## In your menu bar, or full screen
 
 <table>
@@ -39,18 +53,6 @@ this week.
     <td align="center" colspan="2">Give each area its own board (a client, a project, a side hustle, home), each with its own colour. Switch with one click or ⌘1–⌘9, or view them all together.</td>
   </tr>
 </table>
-
-## Shorthand capture
-
-Type a task the way you'd jot it down, and add a little shorthand to file it as you go:
-
-```
-Send invoice @work !s #billing
-```
-
-That lands on **Work**, sized **S**, tagged **billing**. Use `@` for the board, `!` for the size (`xs` to `xl`)
-and `#` for tags, in any order, or skip them all. Boards also answer to short aliases like `@w`, and it
-works the same in the board's add field and from Raycast.
 
 ## Fast, tidy, private
 
