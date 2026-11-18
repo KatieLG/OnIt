@@ -17,6 +17,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let panel: Panel
     private var keyRouter: KeyboardRouter?
     private var laterExpanded: Bool
+    private var closedAt = Date.distantPast
 
     init(store: AppStore, openSettings: @escaping () -> Void) {
         self.store = store
@@ -57,7 +58,11 @@ final class PanelController: NSObject, NSWindowDelegate {
         observeContinuously { [weak self] in self?.laterChanged() }
     }
 
-    func toggle() { panel.isVisible ? close() : show() }
+    /// Clicking the menu bar icon while the panel is open closes it on mouse-down (as a click
+    /// outside the panel) before the toggle runs on mouse-up, so a close that just happened counts.
+    func toggle() {
+        if panel.isVisible || Date.now.timeIntervalSince(closedAt) < 0.3 { close() } else { show() }
+    }
 
     func show() {
         place()
@@ -71,6 +76,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard panel.isVisible else { return }
         ui.commitEdit()
         panel.orderOut(nil)
+        closedAt = .now
         store.flush()
     }
 
