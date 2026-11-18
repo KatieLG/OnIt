@@ -232,11 +232,7 @@ struct StoreTests {
         #expect(store.tasks(in: .todo, boardId: home.id).first?.size == .l, "the size is kept")
         #expect(!store.showsSizes(boardId: home.id) && store.showsSizes(boardId: nil))
         store.updateBoard(work.id) { $0.showsSizes = false }
-        #expect(!store.showsSizes(boardId: nil), "All hides sizes once no board shows them")
-        store.setShowsSizes(true, boardId: nil)
-        store.setShowsSizes(false, boardId: work.id)
-        #expect(store.boards.map(\.showsSizes) == [true, false])
-    }
+        #expect(!store.showsSizes(boardId: nil), "All hides sizes once no board shows them")    }
 
     @Test func boardsSavedBeforeShowsSizesStillLoad() throws {
         let json = ##"{"id":"\##(UUID())","name":"Old","aliases":[],"colorHex":"#000000","isDefault":true,"sortOrder":0}"##

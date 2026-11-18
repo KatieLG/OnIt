@@ -38,21 +38,10 @@ struct TopBar: View {
             .frame(width: 190)
             .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
 
-            let sized = store.showsSizes(boardId: ui.selectedBoardId)
-            Button {
-                store.setShowsSizes(!sized, boardId: ui.selectedBoardId)
-                if sized { ui.filter.sizes = [] } // don't leave a size filter on that can't be seen
-            } label: {
-                Image(systemName: sized ? "tshirt.fill" : "tshirt").foregroundStyle(sized ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-            }
-            .buttonStyle(.borderless)
-            .help("\(sized ? "Hide" : "Show") sizes \(ui.selectedBoardId == nil ? "on every board" : "on this board")")
-            .accessibilityLabel("Show sizes")
-            .accessibilityValue(sized ? "On" : "Off")
-            FilterMenu(title: "Size", options: TaskSize.allCases.map(Optional.some) + [nil], selection: $ui.filter.sizes) {
+            FilterMenu(title: "Size", options: TaskSize.allCases.map(Optional.some) + [nil], selection: $ui.filter.sizes,
+                       optionsEnabled: store.showsSizes(boardId: ui.selectedBoardId), header: AnyView(ShowSizesToggle())) {
                 $0?.label ?? "Unsized"
             }
-            .disabled(!sized)
             FilterMenu(title: "#Tag", options: store.allTags, selection: $ui.filter.tags) { "#\($0)" }
             Button { ui.openSettings() } label: { Image(systemName: "gearshape") }
                 .buttonStyle(.borderless)
@@ -89,21 +78,45 @@ private struct BoardTab: View {
     }
 }
 
+/// The board's "Show sizes" setting, at the top of the Size menu. All has no single board to change.
+private struct ShowSizesToggle: View {
+    @Environment(AppStore.self) private var store
+    @Environment(BoardUIState.self) private var ui
+
+    var body: some View {
+        if let board = store.board(id: ui.selectedBoardId) {
+            Toggle("Show Sizes on \(board.name)", isOn: Binding(get: { board.showsSizes }, set: { on in
+                store.updateBoard(board.id) { $0.showsSizes = on }
+                if !on { ui.filter.sizes = [] } // don't leave a size filter on that can't be seen
+            }))
+        } else {
+            Text("Choose a board to show or hide sizes")
+        }
+    }
+}
+
 /// A multi-select filter menu, e.g. sizes or tags.
 private struct FilterMenu<Value: Hashable>: View {
     let title: String
     let options: [Value]
     @Binding var selection: Set<Value>
+    var optionsEnabled = true
+    var header: AnyView?
     let label: (Value) -> String
 
     var body: some View {
         Menu {
+            if let header {
+                header
+                Divider()
+            }
             if options.isEmpty { Text("Nothing to filter yet") }
             ForEach(options, id: \.self) { option in
                 Toggle(label(option), isOn: Binding(
                     get: { selection.contains(option) },
                     set: { if $0 { selection.insert(option) } else { selection.remove(option) } }
                 ))
+                .disabled(!optionsEnabled)
             }
             if !selection.isEmpty {
                 Divider()
