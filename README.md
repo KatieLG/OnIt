@@ -36,12 +36,9 @@ this week.
     <td width="50%"><img src="docs/screenshots/onit-work.png" alt="OnIt showing a different board on its own"></td>
   </tr>
   <tr>
-    <td align="center" colspan="2">Give each area its own board (a client, a project, a side hustle, home), each with its own colour.</td>
+    <td align="center" colspan="2">Give each area its own board (a client, a project, a side hustle, home), each with its own colour. Switch with one click or ⌘1–⌘9, or view them all together.</td>
   </tr>
 </table>
-
-Look at one board at a time, or all of them together in **All**. Switch with one click or ⌘1–⌘9.
-OnIt starts you off with *Home* and *Work*; rename them, recolour them, or add as many as you like.
 
 ## Shorthand capture
 
@@ -55,14 +52,6 @@ That lands on **Work**, sized **S**, tagged **billing**. Use `@` for the board, 
 and `#` for tags, in any order, or skip them all. Boards also answer to short aliases like `@w`, and it
 works the same in the board's add field and from Raycast.
 
-## Sizes (optional)
-
-Sizes are on by default. Give a task a size from XS to XL and it shows as a colour stripe and a label you
-can click to change. Each column adds up its total.
-
-Don't need them? Turn off **Show Sizes** for a board in the **Size** menu (or in **Settings → Boards**).
-Any sizes you've set are kept, in case you turn them back on.
-
 ## Fast, tidy, private
 
 - **Keyboard first, drag friendly.** Arrow keys to move around, ⌘-arrows to move cards, ⌥1–5 to size them,
@@ -70,6 +59,9 @@ Any sizes you've set are kept, in case you turn them back on.
 - **Tidies itself.** Done tasks move to the Archive after a week, so the board stays about now.
 - **Private by design.** No account, no cloud, no tracking. One readable JSON file on your Mac, with
   automatic backups.
+- **Sizes, if you want them.** Size tasks XS to XL, with a colour stripe and a label you can click to change,
+  and each column adds up its total. Don't need them? Turn off **Show Sizes** for a board in the **Size** menu
+  for a cleaner board. Any sizes you've set are kept.
 
 ## Install
 
