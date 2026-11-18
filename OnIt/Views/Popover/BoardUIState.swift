@@ -168,7 +168,7 @@ final class BoardUIState {
     }
 
     func setSizeOnSelected(_ size: TaskSize?) {
-        if let id = selectedTask?.id { store.update(id) { $0.size = size } }
+        if let task = selectedTask, store.showsSizes(boardId: task.boardId) { store.update(task.id) { $0.size = size } }
     }
 
     func editSelected() {

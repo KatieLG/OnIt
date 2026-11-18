@@ -78,6 +78,10 @@ private struct BoardEditor: View {
                         .foregroundStyle(aliasError == nil ? .secondary : Color.red)
                 }
             }
+            Toggle(isOn: Binding(get: { board.showsSizes }, set: { on in store.updateBoard(board.id) { $0.showsSizes = on } })) {
+                Text("Show sizes")
+                Text("Size chips, colours and points on cards. Turning this off keeps existing sizes.")
+            }
             Picker("Default board", selection: Binding(get: { store.defaultBoard.id }, set: { store.setDefaultBoard($0) })) {
                 ForEach(store.boards) { Text($0.name.isEmpty ? "Untitled" : $0.name).tag($0.id) }
             }

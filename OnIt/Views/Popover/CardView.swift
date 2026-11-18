@@ -9,9 +9,9 @@ struct CardView: View {
 
     var body: some View {
         let selected = ui.selectedTaskId == task.id, editing = ui.editingTaskId == task.id
-        let board = store.board(id: task.boardId)
+        let board = store.board(id: task.boardId), sized = board?.showsSizes ?? true
         HStack(spacing: 0) {
-            Rectangle().fill(SizeStyle.color(task.size)).frame(width: 4)
+            if sized { Rectangle().fill(SizeStyle.color(task.size)).frame(width: 4) }
             VStack(alignment: .leading, spacing: 6) {
                 if editing {
                     @Bindable var ui = ui
@@ -24,7 +24,7 @@ struct CardView: View {
                     Text(task.title).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading).padding(.trailing, isHovering ? 18 : 0)
                 }
                 HStack(spacing: 4) {
-                    SizeChip(size: task.size)
+                    if sized { SizeMenu(task: task) }
                     ForEach(task.tags.prefix(2), id: \.self) { Pill(text: "#\($0)") }
                     if task.tags.count > 2 { Pill(text: "+\(task.tags.count - 2)") }
                     Spacer(minLength: 4)
@@ -67,12 +67,12 @@ struct CardView: View {
         }
         .contextMenu { CardMenu(task: task) }
         .draggable(task.id.uuidString) {
-            HStack(spacing: 6) { SizeChip(size: task.size); Text(task.title).lineLimit(1) }
+            HStack(spacing: 6) { if sized { SizeChip(size: task.size) }; Text(task.title).lineLimit(1) }
                 .padding(8)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([task.title, SizeStyle.spoken(task.size), board.map { "\($0.name) board" }, "in \(task.column.title)",
+        .accessibilityLabel([task.title, sized ? SizeStyle.spoken(task.size) : nil, board.map { "\($0.name) board" }, "in \(task.column.title)",
                              task.tags.isEmpty ? nil : "tags " + task.tags.joined(separator: ", ")].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
         .accessibilityAction(named: "Edit title") { ui.beginEdit(task.id) }
@@ -99,10 +99,7 @@ private struct CardMenu: View {
 
     var body: some View {
         Button("Edit Title") { ui.beginEdit(task.id) }
-        Picker("Size", selection: binding(\.size)) {
-            ForEach(TaskSize.allCases) { Text($0.label).tag(Optional($0)) }
-            Text("None").tag(TaskSize?.none)
-        }
+        if store.showsSizes(boardId: task.boardId) { SizePicker(task: task) }
         Picker("Move To", selection: Binding(get: { task.column }, set: { column in ui.animate { store.move(task.id, to: column) } })) {
             ForEach(Column.allCases) { Text($0.title).tag($0) }
         }
@@ -116,6 +113,33 @@ private struct CardMenu: View {
 
     private func binding<Value>(_ path: WritableKeyPath<TaskItem, Value>) -> Binding<Value> {
         Binding(get: { task[keyPath: path] }, set: { value in store.update(task.id) { $0[keyPath: path] = value } })
+    }
+}
+
+/// The size choices, as a submenu in the card menu or inline in the chip's menu.
+private struct SizePicker: View {
+    @Environment(AppStore.self) private var store
+    let task: TaskItem
+
+    var body: some View {
+        Picker("Size", selection: Binding(get: { task.size }, set: { size in store.update(task.id) { $0.size = size } })) {
+            ForEach(TaskSize.allCases) { Text($0.label).tag(Optional($0)) }
+            Text("None").tag(TaskSize?.none)
+        }
+    }
+}
+
+/// The card's size chip; click it to change the size.
+private struct SizeMenu: View {
+    let task: TaskItem
+
+    var body: some View {
+        Menu { SizePicker(task: task).pickerStyle(.inline).labelsHidden() } label: { SizeChip(size: task.size) }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Change size")
     }
 }
 

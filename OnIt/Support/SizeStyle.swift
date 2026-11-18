@@ -1,18 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// Size colours, load points and meanings, in one place.
+/// Size colours and load points, in one place. Sizes are relative: what an M means is up to you.
 enum SizeStyle {
     /// Over this many points, In Progress is tinted as a gentle warning.
     static let doingWarning = 13
 
-    private static let table: [TaskSize: (hex: String, points: Int, meaning: String)] = [
-        .xs: ("#34C3A0", 1, "A few minutes"), .s: ("#8BC34A", 2, "Under an hour"), .m: ("#F2C14E", 3, "Half a day"),
-        .l: ("#F28C38", 5, "Most of a day"), .xl: ("#E5484D", 8, "Multi-day"),
+    private static let table: [TaskSize: (hex: String, points: Int)] = [
+        .xs: ("#34C3A0", 1), .s: ("#8BC34A", 2), .m: ("#F2C14E", 3), .l: ("#F28C38", 5), .xl: ("#E5484D", 8),
     ]
 
     static func points(_ size: TaskSize?) -> Int { size.flatMap { table[$0]?.points } ?? 0 }
-    static func meaning(_ size: TaskSize?) -> String { size.flatMap { table[$0]?.meaning } ?? "Not yet sized" }
     static func color(_ size: TaskSize?) -> Color { size.flatMap { table[$0] }.map { Color(hex: $0.hex) } ?? .secondary.opacity(0.45) }
     static func spoken(_ size: TaskSize?) -> String { size.map { "size \($0.label)" } ?? "no size" }
 }

@@ -221,7 +221,26 @@ struct StoreTests {
 
     @Test func loadPointsAndFilters() {
         ["a !xs", "b !s", "c !m", "d !l", "e !xl", "f"].forEach { store.add($0) }
-        #expect(AppStore.loadPoints(store.tasks(in: .todo)) == 19 && store.activeCount(in: .todo) == 6)
+        #expect(store.loadPoints(store.tasks(in: .todo)) == 19 && store.activeCount(in: .todo) == 6)
+    }
+
+    @Test func hidingSizesOnABoard() {
+        store.add("a !l @home")
+        store.add("b !m @work")
+        store.updateBoard(home.id) { $0.showsSizes = false }
+        #expect(store.loadPoints(store.tasks(in: .todo)) == 3, "home's L no longer counts")
+        #expect(store.tasks(in: .todo, boardId: home.id).first?.size == .l, "the size is kept")
+        #expect(!store.showsSizes(boardId: home.id) && store.showsSizes(boardId: nil))
+        store.updateBoard(work.id) { $0.showsSizes = false }
+        #expect(!store.showsSizes(boardId: nil), "All hides sizes once no board shows them")
+    }
+
+    @Test func boardsSavedBeforeShowsSizesStillLoad() throws {
+        let json = ##"{"id":"\##(UUID())","name":"Old","aliases":[],"colorHex":"#000000","isDefault":true,"sortOrder":0}"##
+        let board = try JSONDecoder().decode(Board.self, from: Data(json.utf8))
+        #expect(board.name == "Old" && board.showsSizes)
+        let roundTrip = try JSONDecoder().decode(Board.self, from: JSONEncoder().encode(Board(name: "N", colorHex: "#000000", showsSizes: false)))
+        #expect(!roundTrip.showsSizes)
     }
 
     @Test func filters() {

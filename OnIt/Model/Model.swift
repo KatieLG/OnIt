@@ -29,9 +29,24 @@ struct Board: Codable, Identifiable, Hashable, Sendable {
     var colorHex: String
     var isDefault = false
     var sortOrder = 0
+    /// Off hides size chips, colours and points on this board's cards; sizes are kept, just not shown.
+    var showsSizes = true
 
     /// The name as a shorthand alias: "Acme Co" → `acme-co`.
     var nameSlug: String { name.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: "-") }
+}
+
+extension Board {
+    private enum CodingKeys: String, CodingKey { case id, name, aliases, colorHex, isDefault, sortOrder, showsSizes }
+
+    /// Spelled out so files from before `showsSizes` existed still load.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(UUID.self, forKey: .id), name: try c.decode(String.self, forKey: .name),
+                  aliases: try c.decode([String].self, forKey: .aliases), colorHex: try c.decode(String.self, forKey: .colorHex),
+                  isDefault: try c.decode(Bool.self, forKey: .isDefault), sortOrder: try c.decode(Int.self, forKey: .sortOrder),
+                  showsSizes: try c.decodeIfPresent(Bool.self, forKey: .showsSizes) ?? true)
+    }
 }
 
 /// A card. Not `Task`, which would clash with Swift concurrency.

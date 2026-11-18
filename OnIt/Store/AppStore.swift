@@ -97,7 +97,11 @@ final class AppStore {
     }
 
     static func displayOrder(_ a: TaskItem, _ b: TaskItem) -> Bool { (a.order, a.createdAt) < (b.order, b.createdAt) }
-    static func loadPoints(_ tasks: [TaskItem]) -> Int { tasks.reduce(0) { $0 + SizeStyle.points($1.size) } }
+
+    /// Whether sizes show for a board's cards, or for nil (All), whether any board shows them.
+    func showsSizes(boardId: UUID?) -> Bool { boardId.map { board(id: $0)?.showsSizes ?? true } ?? boards.contains(where: \.showsSizes) }
+    /// Total size points, skipping tasks on boards with sizes hidden.
+    func loadPoints(_ tasks: [TaskItem]) -> Int { tasks.reduce(0) { $0 + (showsSizes(boardId: $1.boardId) ? SizeStyle.points($1.size) : 0) } }
 
     var allTags: [String] { Set(tasks.filter { !$0.isArchived }.flatMap(\.tags)).sorted() }
     func activeCount(in column: Column) -> Int { tasks.count(where: { !$0.isArchived && $0.column == column }) }

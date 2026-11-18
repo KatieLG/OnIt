@@ -73,18 +73,23 @@ struct ColumnView: View {
 }
 
 private struct ColumnHeader: View {
+    @Environment(AppStore.self) private var store
+    @Environment(BoardUIState.self) private var ui
     let column: Column
     let tasks: [TaskItem]
 
     var body: some View {
-        let points = AppStore.loadPoints(tasks)
-        let heavy = column == .doing && points > SizeStyle.doingWarning
+        let sized = store.showsSizes(boardId: ui.selectedBoardId)
+        let points = store.loadPoints(tasks)
+        let heavy = sized && column == .doing && points > SizeStyle.doingWarning
         HStack(spacing: 4) {
             Text(column.title).font(.system(.subheadline, design: .rounded).weight(.semibold))
-            Text("· \(tasks.count) ·").foregroundStyle(.secondary)
-            Text(Formatting.points(points))
-                .foregroundStyle(heavy ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
-                .fontWeight(heavy ? .semibold : .regular)
+            Text(sized ? "· \(tasks.count) ·" : "· \(tasks.count)").foregroundStyle(.secondary)
+            if sized {
+                Text(Formatting.points(points))
+                    .foregroundStyle(heavy ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                    .fontWeight(heavy ? .semibold : .regular)
+            }
         }
         .font(.subheadline)
         .monospacedDigit()
@@ -93,7 +98,7 @@ private struct ColumnHeader: View {
         .padding(.trailing, column == .later ? 18 : 0)
         .help(heavy ? "Heavy load: over \(SizeStyle.doingWarning) points in progress" : "")
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(column.title), \(tasks.count) cards, \(Formatting.points(points))\(heavy ? ", heavy load" : "")")
+        .accessibilityLabel("\(column.title), \(tasks.count) cards\(sized ? ", " + Formatting.points(points) : "")\(heavy ? ", heavy load" : "")")
     }
 }
 

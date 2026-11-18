@@ -44,7 +44,7 @@ private struct ArchiveRow: View {
     var body: some View {
         let completed = task.completedAt.map { "completed \($0.formatted(date: .abbreviated, time: .omitted))" }
         HStack(spacing: 10) {
-            SizeChip(size: task.size)
+            if store.showsSizes(boardId: task.boardId) { SizeChip(size: task.size) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title).lineLimit(2)
                 Text([store.board(id: task.boardId)?.name, completed].compactMap { $0 }.joined(separator: " · "))

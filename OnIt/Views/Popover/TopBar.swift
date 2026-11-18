@@ -38,8 +38,10 @@ struct TopBar: View {
             .frame(width: 190)
             .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
 
-            FilterMenu(title: "Size", options: TaskSize.allCases.map(Optional.some) + [nil], selection: $ui.filter.sizes) {
-                $0.map { "\($0.label) · \(SizeStyle.meaning($0))" } ?? "Unsized"
+            if store.showsSizes(boardId: ui.selectedBoardId) {
+                FilterMenu(title: "Size", options: TaskSize.allCases.map(Optional.some) + [nil], selection: $ui.filter.sizes) {
+                    $0?.label ?? "Unsized"
+                }
             }
             FilterMenu(title: "#Tag", options: store.allTags, selection: $ui.filter.tags) { "#\($0)" }
             Button { ui.openSettings() } label: { Image(systemName: "gearshape") }

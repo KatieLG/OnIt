@@ -88,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 let (task, board, warning) = try store.add(text: text)
                 statusItem?.pulse()
-                let summary = [task.size?.label, task.title].compactMap { $0 }.joined(separator: " · ")
+                let summary = [board.showsSizes ? task.size?.label : nil, task.title].compactMap { $0 }.joined(separator: " · ")
                 // Warnings always notify, so a mistyped @board isn't missed.
                 if let warning {
                     notifier.post(warning, summary)
