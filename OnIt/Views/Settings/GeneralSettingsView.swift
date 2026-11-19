@@ -30,6 +30,9 @@ struct GeneralSettingsView: View {
                 Picker("Menu bar badge", selection: setting(\.badgeMode)) {
                     ForEach(BadgeMode.allCases) { Text($0.title).tag($0) }
                 }
+                Picker("Theme", selection: setting(\.theme)) {
+                    ForEach(Theme.allCases) { Text($0.title).tag($0) }
+                }
                 Toggle("Notify when a task is added", isOn: setting(\.notifyOnAdd))
                     .onChange(of: store.settings.notifyOnAdd) { _, on in if on { Task { await Notifier.shared.requestPermission() } } }
                 Toggle("Launch at login", isOn: Binding(get: { store.settings.launchAtLogin }, set: { setLaunchAtLogin($0) }))

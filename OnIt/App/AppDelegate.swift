@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel = PanelController(store: store) { [weak self] in self?.showSettings() }
         statusItem = StatusItemController(store: store, menu: menu()) { [weak self] in self?.panel?.toggle() }
         panel?.anchor = statusItem?.button
+        observeContinuously { [weak self] in self?.applyTheme() }
 
         store.sweepArchive()
         store.startWatchingFile()
@@ -52,6 +53,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.runModal()
             }
         }
+    }
+
+    /// App-wide, so the panel, windows and Settings all follow it; `nil` tracks the system.
+    /// Skips unchanged themes, since any settings change re-runs this.
+    private func applyTheme() {
+        let name: NSAppearance.Name? = switch store.settings.theme {
+        case .system: nil
+        case .light: .aqua
+        case .dark: .darkAqua
+        }
+        guard NSApp.appearance?.name != name else { return }
+        NSApp.appearance = name.flatMap(NSAppearance.init(named:))
     }
 
     func applicationWillTerminate(_: Notification) { store.flush(synchronously: true) }

@@ -76,6 +76,12 @@ enum BadgeMode: String, Codable, CaseIterable, Identifiable, Sendable {
     var title: String { self == .doing ? "In Progress" : rawValue.capitalized }
 }
 
+enum Theme: String, Codable, CaseIterable, Identifiable, Sendable {
+    case system, light, dark
+    var id: Self { self }
+    var title: String { self == .system ? "Match System" : rawValue.capitalized }
+}
+
 struct AppSettings: Codable, Equatable, Sendable {
     static let archiveDaysRange = 1...60
 
@@ -87,4 +93,24 @@ struct AppSettings: Codable, Equatable, Sendable {
     var laterExpanded = false
     /// `nil` means the All view.
     var lastSelectedBoardId: UUID?
+    var theme = Theme.system
+}
+
+extension AppSettings {
+    private enum CodingKeys: String, CodingKey {
+        case defaultSize, archiveAfterDays, badgeMode, notifyOnAdd, launchAtLogin, laterExpanded, lastSelectedBoardId, theme
+    }
+
+    /// Spelled out so files from before `theme` existed still load.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(defaultSize: try c.decodeIfPresent(TaskSize.self, forKey: .defaultSize),
+                  archiveAfterDays: try c.decode(Int.self, forKey: .archiveAfterDays),
+                  badgeMode: try c.decode(BadgeMode.self, forKey: .badgeMode),
+                  notifyOnAdd: try c.decode(Bool.self, forKey: .notifyOnAdd),
+                  launchAtLogin: try c.decode(Bool.self, forKey: .launchAtLogin),
+                  laterExpanded: try c.decode(Bool.self, forKey: .laterExpanded),
+                  lastSelectedBoardId: try c.decodeIfPresent(UUID.self, forKey: .lastSelectedBoardId),
+                  theme: try c.decodeIfPresent(Theme.self, forKey: .theme) ?? .system)
+    }
 }

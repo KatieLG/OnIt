@@ -36,6 +36,14 @@ struct PersistenceTests {
         #expect(persistence.load { Snapshot.seed() } == (snapshot, nil))
     }
 
+    @Test func settingsFromBeforeThemeLoadAsSystem() throws {
+        let json = #"{ "archiveAfterDays": 7, "badgeMode": "doing", "notifyOnAdd": false, "launchAtLogin": false, "laterExpanded": false }"#
+        #expect(try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8)).theme == .system)
+        var settings = AppSettings()
+        settings.theme = .dark
+        #expect(try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings)) == settings)
+    }
+
     @Test func rejectsFutureSchema() {
         #expect(throws: (any Error).self) { try Snapshot.decode(Data(#"{ "schemaVersion": 99, "boards": [], "tasks": [], "settings": {} }"#.utf8)) }
     }
